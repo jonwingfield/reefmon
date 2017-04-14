@@ -1,0 +1,15 @@
+[package]
+name = "aquamon"
+version = "0.1.0"
+authors = ["Jon Wingfield <wingfield.jon@gmail.com>"]
+
+[dependencies]
+env_logger = "*"
+i2cdev = "*"
+byteorder = "^0.4.2"
+aquamon_server = { path = '../aquamon_server/' }
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+chrono = { version = "*", features = ["serde"] }
+sysfs_gpio = "*"

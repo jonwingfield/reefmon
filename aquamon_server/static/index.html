@@ -1,0 +1,93 @@
+<html>
+  <head>
+    <title>ReefMon 0.1</title>
+    <link rel="stylesheet" href="css/style.css" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.7.4/d3.js" integrity="sha256-T9kqMOI1/xyTd99UNzG2DfAhlV2luNGwDJTeCCDLlFs=" crossorigin="anonymous"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js" integrity="sha256-1hjUhpc44NwiNg8OwMu2QzJXhD8kcj+sJA3aCQZoUjg=" crossorigin="anonymous"></script>
+      <script src="script/lighting_graph.js"></script>
+      <script src="script/app.js"></script>
+  </head>
+  <body>
+    <section id="scheduleDetail">
+      <section id="colorchange">
+        <fieldset id="colorsliders">
+          <span>
+            <input type="range" min="0" max="255" class="color-uv" data-color="UV" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-rb" data-color="RoyalBlue" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-blue" data-color="Blue" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-cw" data-color="CoolWhite" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-nw" data-color="NeutralWhite" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-r" data-color="Red" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+          <span>
+            <input type="range" min="0" max="255" class="color-g" data-color="Green" orient="vertical" />
+            <span class="percent"></span>
+          </span>
+        </fieldset>
+        <fieldset id="intensitysliders">
+          <span>
+            <input type="range" min="0" max="255" class="color-intensity" orient="vertical" id="intensitySlider" />
+            <span class="percent"></span>
+          </span>
+        </fieldset>
+      </section>
+      <div>Start time: <span id="startTime" /></div>
+      <div>
+      <button id="saveButton">Save</button>
+      <input type="checkbox" id="liveMode">&nbsp;<label for="liveMode">Live Mode</label>
+      </div>
+      <div>
+        <button id="preview">Preview</button><input type="range" id="previewSpeed" value="2" min="1" max="10" />
+      </div>
+    </section>
+    <section id="schedule">
+      <svg id="lightingGraph" width="700" height="300"></div>
+    </section>
+    <section> 
+      <div>
+        <h3>Temperature: <span id="current_temp"></span></h3>
+        <label for="temperatureSetPoint">Temperature Set Point</label> <input type="number" id="temperatureSetPoint" min="68" max="82" style="width:7em" />
+        <button id="updateTempSettings">Update</button>
+      </div>
+      <div>
+        <h3>Water Level: <span id="current_depth"></span></h3>
+        <label for="waterLevelLow">Maintain Range of Values: </label> <input type="number" id="waterLevelLow" min="0" max="255" /> - <input type="number" id="waterLevelHigh" min="0" max="255" /> 
+        
+        <fieldset>
+          <div>
+            <label for="minDepthValue">Minimum Depth Value:</label> <input type="number" id="minDepthValue" min="0" max="255" /> 
+          </div>
+          <div>
+            <label for="minDepthValue">Maxiumum Depth Value:</label> <input type="number" id="maxDepthValue" min="0" max="255" /> <label for="maxDepthInches">Inches:</label> <input type="number" id="maxDepthInches" min="1" max="10" />&quot; 
+          </div>
+          <div>
+            <label for="tankSurfaceArea">Tank Surface Area:</label> <input type="number" id="tankSurfaceArea" min="50" max="1000" />
+          </div>
+        </fieldset>
+        <button id="updateDepthSettings">Update</button>
+      </div>
+    </section>
+
+  </body>
+</html>

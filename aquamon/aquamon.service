@@ -1,0 +1,13 @@
+[Unit]
+Description=Aquamon Controller and Low Level i2c Device Proxy
+After=mdns.service
+
+[Service]
+ExecStart=/bin/su root -c 'cd /home/pi/services; ./aquamon'
+Restart=always
+RestartSec=10s
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target
+

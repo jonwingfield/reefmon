@@ -1,0 +1,29 @@
+[package]
+name = "aquamon_server"
+version = "0.1.0"
+authors = ["Jon Wingfield <wingfield.jon@gmail.com>"]
+
+[dependencies.iron]
+version = "*"
+default-features = false
+
+[dependencies.router]
+git = "https://github.com/iron/router.git"
+
+[dependencies.mount]
+git = "https://github.com/iron/mount.git"
+
+[dependencies.staticfile]
+git = "https://github.com/iron/staticfile.git"
+default-features = false
+
+[dependencies.bodyparser]
+git = "https://github.com/iron/body-parser.git"
+
+[dependencies.persistent]
+version = "*"
+
+[dependencies]
+serde = "*"
+serde_derive = "*"
+serde_json = "*"

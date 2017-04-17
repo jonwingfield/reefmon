@@ -54,7 +54,7 @@ impl Schedule {
         let active_pos = next_pos-1;
         let active = (&self.legs[active_pos], &self.legs[next_pos]);
 
-        println!("Active: {:?} {:?} {:?} {:?} {:?}", active.0.start_time, active.1.start_time, active_pos, next_pos, time);
+        trace!("Active: {:?} {:?} {:?} {:?} {:?}", active.0.start_time, active.1.start_time, active_pos, next_pos, time);
         
         Schedule::calc_intensities(time, active.0, active.1)
     }

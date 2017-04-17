@@ -7,7 +7,7 @@ pub mod temp {
 
     pub enum C {}
     pub enum F {}
-    pub struct Temperature<Unit>(pub i16, PhantomData<Unit>);
+    pub struct Temperature<Unit>(pub i32, PhantomData<Unit>);
 
     // Implements ordering on the first field for a tuple struct
     macro_rules! impl_ord_tuple {
@@ -30,13 +30,13 @@ pub mod temp {
 
     impl fmt::Display for Temperature<C> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}C", self.0 as f32 / 10.0)
+            write!(f, "{}C", self.0 as f32 / 100.0)
         }
     }
 
     impl fmt::Display for Temperature<F> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}F", self.0 as f32 / 10.0)
+            write!(f, "{}F", self.0 as f32 / 100.0)
         }
     }
 
@@ -63,29 +63,29 @@ pub mod temp {
 
     impl Temperature<C> {
         pub fn in_c(degrees: f32) -> Temperature<C> {
-            Temperature((degrees * 10.0) as i16, PhantomData)
+            Temperature((degrees * 100.0) as i32, PhantomData)
         }
 
         pub fn to_f(&self) -> Temperature<F> {
-            Temperature::in_f(((self.0 as f32)/10.0 * (9.0/5.0) + 32.0))
+            Temperature::in_f(((self.0 as f32)/100.0 * (9.0/5.0) + 32.0))
         }
 
         pub fn value(&self) -> f32 {
-            return self.0 as f32 / 10.0;
+            return self.0 as f32 / 100.0;
         }
     }
 
     impl Temperature<F> {
         pub fn in_f(degrees: f32) -> Temperature<F> {
-            Temperature((degrees * 10.0) as i16, PhantomData)
+            Temperature((degrees * 100.0) as i32, PhantomData)
         }
 
         pub fn to_c(&self) -> Temperature<C> {
-            Temperature::in_c((self.0 as f32 / 10.0 - 32.0) * (5.0/9.0))
+            Temperature::in_c((self.0 as f32 / 100.0 - 32.0) * (5.0/9.0))
         }
 
         pub fn value(&self) -> f32 {
-            return self.0 as f32 / 10.0;
+            return self.0 as f32 / 100.0;
         }
     }
 }

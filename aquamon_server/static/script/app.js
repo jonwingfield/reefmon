@@ -176,7 +176,7 @@ $(function() {
 
   });
 
-  window.setInterval(function() {
+  var updateStatus = function() {
     $.getJSON('/api/status').then(function(data) {
       var temp = $('#current_temp').html(data.currentTempF + 'F');
       var depth = $('#current_depth').html(data.depth);
@@ -197,7 +197,9 @@ $(function() {
         temp.addClass('inRange').removeClass('outOfRange');
       }
     });
-  } , 1000);
+  };
+  window.setInterval(updateStatus, 6000);
+  updateStatus();
 
   var getFloatValue = function(id) {
     return parseFloat($(id).val());
@@ -221,7 +223,7 @@ $(function() {
     e.preventDefault();
     var settings = { 
       maintainRange: { low: getIntValue('#waterLevelLow'), high: getIntValue('#waterLevelHigh') },
-      depthValues: { low: getIntValue('#minDepthValue'), high: getIntValue('#maxDepthValue'), highInches: getFloatValue('#maxDepthInches'), tankSurfaceArea: getIntValue('#tankSurfaceArea') }
+      depthValues: { low: getIntValue('#minDepthValue'), high: getIntValue('#maxDepthValue'), highInches: getFloatValue('#maxDepthInches'), tankSurfaceArea: getIntValue('#tankSurfaceArea'), pumpGph: getFloatValue('#pumpGph') }
     };
 
     $.post('/api/settings/depth', JSON.stringify(settings));
@@ -234,5 +236,6 @@ $(function() {
     $('#maxDepthValue').val(data.depthValues.high);
     $('#maxDepthInches').val(data.depthValues.highInches);
     $('#tankSurfaceArea').val(data.depthValues.tankSurfaceArea);
+    $('#pumpGph').val(data.depthValues.pumpGph);
   });
 });

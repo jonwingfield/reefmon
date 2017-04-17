@@ -4,6 +4,9 @@ extern crate byteorder;
 extern crate aquamon_server;
 extern crate chrono;
 extern crate serde_json;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 use std::thread;
 use std::io;
@@ -14,8 +17,13 @@ use std::sync::mpsc::{channel, TryRecvError, Receiver};
 use std::sync::{RwLock, Arc};
 use chrono::NaiveTime;
 
+// logging
+use std::env;
+use log::{LogRecord, LogLevelFilter};
+use env_logger::LogBuilder;
+
 use aquamon::uom::temp::Temperature;
-use aquamon::devices::AvrController;
+use aquamon::devices::Devices;
 use aquamon::controller::{AquariumController, Calibration};
 use aquamon::controller::schedule::{Schedule, ScheduleLeg};
 
@@ -27,11 +35,12 @@ use aquamon_server::server::{Settings, Commands, LightSettings, TemperatureSetti
 const TICK_MS: u16 = 10;
 
 fn main() {
+    init_logging();
     let mut settings_dto = load_settings().unwrap_or(Settings {
         temperature_settings: TemperatureSettings { setPoint: 79.5 },
         depth_settings: DepthSettings { 
             maintainRange: DepthSettingsMaintain { low: 0, high: 1},
-            depthValues: DepthSettingsDepthValues { low: 0, high: 255, highInches: 10.0, tankSurfaceArea: 17*10 }
+            depthValues: DepthSettingsDepthValues { low: 0, high: 255, highInches: 10.0, tankSurfaceArea: 17*10, pumpGph: 50.0 }
         },
         lighting_schedule: ScheduleDto {
             schedule: vec![
@@ -42,19 +51,25 @@ fn main() {
     });
 
     let (status_lock, rx_live, rx_commands) = start_server(&settings_dto);
-    let avr_controller = AvrController::new(1).unwrap();
-    let mut controller = AquariumController::new(Schedule::default(), avr_controller, TICK_MS, 
+    let mut devices = Devices::new(1).unwrap();
+    let temp = Temperature::in_f(80.0);
+    let temp_signal = devices.temp_stream()
+        .fold((temp, temp, temp, temp), |(b,c,d,_), a| (a,b,c,d))
+        .map(|(a,b,c,d)| ((a + b + c + d).value() / 4.0 * 10.0).round() as f32 / 10.0);
+    let depth_signal = devices.depth_stream().hold(61);
+    let mut controller = AquariumController::new(Schedule::default(), 
                                                  Temperature::in_f(settings_dto.temperature_settings.setPoint),
                                                  settings_dto.depth_settings.maintainRange.low,
                                                  settings_dto.depth_settings.maintainRange.high,
                                                  Calibration {
                                                      low: settings_dto.depth_settings.depthValues.low,
                                                      high: settings_dto.depth_settings.depthValues.high,
-                                                     highInches: settings_dto.depth_settings.depthValues.highInches,
-                                                     tankSurfaceArea: settings_dto.depth_settings.depthValues.tankSurfaceArea,
-                                                 }); 
+                                                     high_inches: settings_dto.depth_settings.depthValues.highInches,
+                                                     tank_surface_area: settings_dto.depth_settings.depthValues.tankSurfaceArea,
+                                                     pump_gph: settings_dto.depth_settings.depthValues.pumpGph,
+                                                 }, devices.temp_stream(), devices.depth_stream()); 
 
-    let mut i:u16 = 0;
+    let mut i:u64 = 0;
     loop {
         match rx_live.try_recv() {
             Ok(config_dto) => {
@@ -65,12 +80,12 @@ fn main() {
                     start_time: NaiveTime::from_hms(0,0,0)
                 };
 
-                match controller.live_mode(leg, 1) {
+                match controller.live_mode(&mut devices, leg, 1) {
                     Err(err) => {
-                        println!("Failed to write: {:?}. Need to retry this operation until it succeeds", err);
+                        error!("Failed to write: {:?}. Need to retry this operation until it succeeds", err);
                     }, 
                     Ok(_) => {
-                        println!("Wrote intensities");
+                        trace!("Wrote intensities");
                     }
                 }
             }, 
@@ -105,6 +120,14 @@ fn main() {
                 }
                 match commands.depth_settings {
                     Some(depth_settings) => {
+                        controller.set_depth_settings(depth_settings.maintainRange.low, depth_settings.maintainRange.high,
+                                                      Calibration {
+                                                          low: settings_dto.depth_settings.depthValues.low,
+                                                          high: settings_dto.depth_settings.depthValues.high,
+                                                          high_inches: settings_dto.depth_settings.depthValues.highInches,
+                                                          tank_surface_area: settings_dto.depth_settings.depthValues.tankSurfaceArea,
+                                                          pump_gph: settings_dto.depth_settings.depthValues.pumpGph,
+                                                      });
                         settings_dto.depth_settings = depth_settings;
                     },
                     None => {}
@@ -117,27 +140,17 @@ fn main() {
             _ => (),
         }
 
-        i = i.overflowing_add(1_u16).0;
-        if i % 300 == 0 {
-            match controller.get_temp() {
-                Ok(temp) => {
-                    println!("Got temp: {:?}", temp.to_f().value()); 
-                    let mut status = status_lock.write().unwrap();
-                    status.currentTempF = temp.to_f().value();
-                },
-                Err(err) => println!("Error getting temp: {:?}", err),
-            }
-            match controller.get_depth() {
-                Ok(depth) => {
-                    println!("Got depth: {:?}", depth);
-                    let mut status = status_lock.write().unwrap();
-                    status.depth = depth;
-                },
-                Err(err) => println!("Error getting depth: {:?}", err),
-            }
+        i += 1;
+        match devices.tick(i * TICK_MS as u64) {
+            Ok(()) => {
+                let mut status = status_lock.write().unwrap();
+                status.currentTempF = temp_signal.sample();
+                status.depth = depth_signal.sample();
+            },
+            Err(err) => error!("error ticking devices: {:?}", err)
         }
-        match controller.tick() {
-            Err(err) => println!("Failed to tick controller. Need to add retry logic. {:?}", err),
+        match controller.tick(&mut devices, i * TICK_MS as u64) {
+            Err(err) => error!("Failed to tick controller. Need to add retry logic. {:?}", err),
             Ok(_) => {}
         }
         thread::sleep(std::time::Duration::from_millis(TICK_MS as u64));
@@ -154,7 +167,7 @@ fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<Config
     let settings_for_server = settings.clone();
 
     thread::spawn(move || { aquamon_server::server::start(tx, status_lock, tx_c, settings_for_server); });
-    println!("started!");
+    trace!("started!");
 
     (status_return, rx, rx_c)
 }
@@ -175,12 +188,27 @@ fn save_settings(config: &Settings) {
 
     let result = file_opened.map(|mut file| {
         let json_string = serde_json::to_string(config).unwrap();
+        // can safely ignore as it only fails if not opened for writing
+        file.set_len(0).unwrap();
         file.write_all(json_string.as_bytes())
     });
     
     if let Err(e) = result {
-        println!("Could not write to settings file {}", e.description());
+        error!("Could not write to settings file {}", e.description());
     } else {
-        println!("settings written");
+        info!("settings written");
     }
+}
+
+fn init_logging() {
+    let format = |record: &LogRecord| {
+        format!("{} - {}", record.level(), record.args())
+    };
+    let mut builder = LogBuilder::new();
+    builder.format(format).filter(None, LogLevelFilter::Error);
+
+    if env::var("RUST_LOG").is_ok() {
+        builder.parse(&env::var("RUST_LOG").unwrap());
+    }
+    builder.init().unwrap();
 }

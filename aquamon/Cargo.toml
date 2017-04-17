@@ -13,3 +13,5 @@ serde_derive = "*"
 serde_json = "*"
 chrono = { version = "*", features = ["serde"] }
 sysfs_gpio = "*"
+log = "*"
+carboxyl = "*"

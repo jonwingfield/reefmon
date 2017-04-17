@@ -6,6 +6,8 @@ extern crate staticfile;
 extern crate persistent;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate log;
 
 extern crate serde_json;
 
@@ -83,6 +85,7 @@ pub mod server {
         pub high: u8,
         pub highInches: f32,
         pub tankSurfaceArea: u16,
+        pub pumpGph: f32,
     }
 
     #[allow(non_snake_case)]
@@ -146,11 +149,11 @@ pub mod server {
                 },
                 // TODO: handle errors
                 Ok(None) => {
-                    println!("Error");
+                    error!("Error");
                     return Ok(Response::with(status::Ok));
                 },
                 Err(err) => {
-                    println!("Error: {:?}", err);
+                    error!("Error: {:?}", err);
                     return Ok(Response::with(status::Ok));
                 },
             }
@@ -182,8 +185,8 @@ pub mod server {
 
                     Ok(Response::with((status::Ok, "".to_string())))
                 },
-                Ok(None) => { println!("Error"); Ok(Response::with(status::Ok)) },
-                Err(err) => { println!("Error: {:?}", err); Ok(Response::with(status::Ok)) }
+                Ok(None) => { error!("Error"); Ok(Response::with(status::Ok)) },
+                Err(err) => { error!("Error: {:?}", err); Ok(Response::with(status::Ok)) }
             }
         }, "temperature_settings");
 
@@ -212,8 +215,8 @@ pub mod server {
 
                     Ok(Response::with((status::Ok, "".to_string())))
                 },
-                Ok(None) => { println!("Error"); Ok(Response::with(status::Ok)) },
-                Err(err) => { println!("Error: {:?}", err); Ok(Response::with(status::Ok)) }
+                Ok(None) => { error!("Error"); Ok(Response::with(status::Ok)) },
+                Err(err) => { error!("Error: {:?}", err); Ok(Response::with(status::Ok)) }
             }
         }, "depth_settings");
 
@@ -231,11 +234,11 @@ pub mod server {
                 },
                 // TODO: handle errors
                 Ok(None) => {
-                    println!("Error");
+                    error!("Error");
                     return Ok(Response::with(status::Ok));
                 },
                 Err(_) => {
-                    println!("Error");
+                    error!("Error");
                     return Ok(Response::with(status::Ok));
                 },
             }

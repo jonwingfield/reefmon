@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <util/crc16.h>
 #include <stdbool.h>
 #include "ds18b20.h"
 #include "dbg.h"
@@ -119,9 +120,30 @@ bool therm_read_temp(temp_info* tinfo)
     therm_command(READ_SCRATCH);
 
     uint16_t temp = 0;
+    uint8_t crc = 0x0; 
 
-    temp = therm_read();
-    temp |= (therm_read() & 0x0F) << 8;  // disregard the top 4 bits, and shift into MSD
+    uint8_t next_byte = therm_read();
+    crc = _crc_ibutton_update(crc, next_byte);
+    temp = next_byte;
+
+    next_byte = therm_read();
+    crc = _crc_ibutton_update(crc, next_byte);
+
+    temp |= (next_byte & 0x0F) << 8;  // disregard the top 4 bits, and shift into MSD
+
+    crc = _crc_ibutton_update(crc, therm_read());
+    crc = _crc_ibutton_update(crc, therm_read());
+    crc = _crc_ibutton_update(crc, therm_read());
+    crc = _crc_ibutton_update(crc, therm_read());
+    crc = _crc_ibutton_update(crc, therm_read());
+    crc = _crc_ibutton_update(crc, therm_read());
+    uint8_t crc_from_sensor = therm_read();
+
+    if (crc_from_sensor != crc) {
+      therm_reset();
+      debug("Failed to match crc");
+      return false;
+    }
 
     if (therm_reset()) { 
         return false;
@@ -132,7 +154,5 @@ bool therm_read_temp(temp_info* tinfo)
     tinfo->minor = (temp & 0xF) * 625;
     tinfo->raw = temp;
 
-    // wait until after the above bytes are written to re-enable interrupts
-
-    return temp;
+    return true;
 }

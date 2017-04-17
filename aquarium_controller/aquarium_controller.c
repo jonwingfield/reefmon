@@ -142,7 +142,6 @@ int main (void)
 void publish_temp(void) {
   temp_info temp;
   if (!therm_read_temp(&temp)) {
-    set_channel6(255);
     printf("Error reading temperature\n");
   } else {
     cli();

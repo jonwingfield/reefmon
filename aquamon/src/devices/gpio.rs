@@ -22,6 +22,13 @@ impl GpioPin {
     pub fn new(index: u64, active_low: bool) -> io::Result<GpioPin> {
         let pin = Pin::new(index);
         pin.export().and_then(|_| pin.set_direction(Direction::Out))
+                    .and_then(|_| {
+                        if active_low {
+                            pin.set_value(1)
+                        } else {
+                            Ok(())
+                        }
+                    })
                     .map(|_| GpioPin { pin: pin, active_low: active_low } )
                     .or_else(|f| {
                         error!("{:#?}", f);

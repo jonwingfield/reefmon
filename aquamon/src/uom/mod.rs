@@ -3,7 +3,7 @@ pub mod temp {
     use std::marker::PhantomData;
     use std::cmp::Ordering;
     use std::fmt;
-    use std::ops::{Sub , Add};
+    use std::ops::{Sub , Add, Mul};
 
     pub enum C {}
     pub enum F {}
@@ -51,6 +51,13 @@ pub mod temp {
         type Output = Self;
         fn add(self, _rhs: Self) -> Self {
             Temperature(self.0 + _rhs.0, PhantomData)
+        }
+    }
+
+    impl<Unit> Mul for Temperature<Unit> {
+        type Output = Self;
+        fn mul(self, _rhs: Self) -> Self {
+            Temperature(self.0 * _rhs.0, PhantomData)
         }
     }
 

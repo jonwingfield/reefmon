@@ -67,19 +67,22 @@
     <section> 
       <div>
         <h3>Temperature: <span id="current_temp"></span></h3>
-        <label for="temperatureSetPoint">Temperature Set Point</label> <input type="number" id="temperatureSetPoint" min="68" max="82" style="width:7em" />
+        <label for="temperatureSetPoint">Temperature Range</label> <input type="number" id="temperatureMin" min="68" max="84" style="width:7em" /> - 
+          <input type="number" id="temperatureMax" min="68" max="84" style="width:7em" />
         <button id="updateTempSettings">Update</button>
+        <div>Air Temperature: <span id="airTemp"></span></div>
+        <div>Humidity: <span id="humidity"></span></div>
       </div>
       <div>
-        <h3>Water Level: <span id="current_depth"></span></h3>
-        <label for="waterLevelLow">Maintain Range of Values: </label> <input type="number" id="waterLevelLow" min="0" max="255" /> - <input type="number" id="waterLevelHigh" min="0" max="255" /> 
+        <h3>Water Level: <span id="current_depth_inches"></span> <small>(<span id="current_depth"></span>)</small></h3>
+        <label for="waterLevelLow">Maintain Range of Values: </label> <input type="number" id="waterLevelLow" min="0" max="1023" /> - <input type="number" id="waterLevelHigh" min="0" max="1023" /> <span>(<span id="rangeInches"></span> range)</span> 
         
         <fieldset>
           <div>
-            <label for="minDepthValue">Minimum Depth Value:</label> <input type="number" id="minDepthValue" min="0" max="255" /> 
+            <label for="minDepthValue">Minimum Depth Value:</label> <input type="number" id="minDepthValue" min="0" max="1023" /> 
           </div>
           <div>
-            <label for="minDepthValue">Maxiumum Depth Value:</label> <input type="number" id="maxDepthValue" min="0" max="255" /> <label for="maxDepthInches">Inches:</label> <input type="number" id="maxDepthInches" min="1" max="10" />&quot; 
+            <label for="minDepthValue">Maxiumum Depth Value:</label> <input type="number" id="maxDepthValue" min="0" max="1023" /> <label for="maxDepthInches">Inches:</label> <input type="number" id="maxDepthInches" min="1" max="10" />&quot; <span>(1/16&quot; = <span id="steps_per_sixteenth"></span> steps)</span>
           </div>
           <div>
             <label for="tankSurfaceArea">Tank Surface Area:</label> <input type="number" id="tankSurfaceArea" min="50" max="1000" />
@@ -89,6 +92,9 @@
           </div>
         </fieldset>
         <button id="updateDepthSettings">Update</button>
+      </div>
+      <div style="margin-top: 2em">
+        <p><a href="history.html">History</a></p>
       </div>
     </section>
 

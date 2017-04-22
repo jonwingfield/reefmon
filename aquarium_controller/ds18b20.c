@@ -99,6 +99,7 @@ void therm_command(uint8_t command)
 
 bool therm_read_temp(temp_info* tinfo)
 {
+  // NOTE: there may be timing issues here, as leaving debug on seems to fix it
     debug("Reading temperature...");
 
     if (therm_reset()) {
@@ -146,9 +147,9 @@ bool therm_read_temp(temp_info* tinfo)
     }
 
     if (therm_reset()) { 
-        return false;
+      debug("Failed to match crc");
+      return false;
     }
-
 
     tinfo->major =  (temp & 0xFF0) >> 4;
     tinfo->minor = (temp & 0xF) * 625;

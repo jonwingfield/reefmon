@@ -8,13 +8,14 @@ extern crate persistent;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
+extern crate iron_compress;
 
 extern crate serde_json;
 
 pub mod server {
-    use persistent::Read;
     use iron::status;
     use iron::prelude::*;
+    use iron_compress::GzipWriter;
     // use iron::{Iron, Request, Response, IronResult};
 
     use mount::Mount;
@@ -26,6 +27,8 @@ pub mod server {
 
     use std::sync::{Mutex, RwLock, Arc};
     use std::sync::mpsc::Sender;
+    use std::fs::File;
+    use std::io::Read;
      
     use serde_json;
 
@@ -57,7 +60,9 @@ pub mod server {
     #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
     pub struct Status {
         pub currentTempF: f32,
-        pub depth: u8,
+        pub depth: u16,
+        pub airTempF: f32,
+        pub humidity: f32,
         // pub pH: f32,
         // pub timestamp: String,
         // TODO: map of on/off triggers
@@ -68,21 +73,22 @@ pub mod server {
     #[allow(non_snake_case)]
     #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
     pub struct TemperatureSettings {
-        pub setPoint: f32,
+        pub min: f32,
+        pub max: f32,
     }
 
     #[allow(non_snake_case)]
     #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
     pub struct DepthSettingsMaintain {
-        pub low: u8,
-        pub high: u8,
+        pub low: u16,
+        pub high: u16,
     }
 
     #[allow(non_snake_case)]
     #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
     pub struct DepthSettingsDepthValues {
-        pub low: u8,
-        pub high: u8,
+        pub low: u16,
+        pub high: u16,
         pub highInches: f32,
         pub tankSurfaceArea: u16,
         pub pumpGph: f32,
@@ -249,12 +255,23 @@ pub mod server {
             Ok(Response::with((status::Ok, serde_json::to_string(&(*status)).unwrap())))
         }, "status");
 
+        router.get("/status/history.csv", move |_: &mut Request| {
+            let mut s = String::new();
+            let result = File::open("history.csv").and_then(|mut file| {
+                file.read_to_string(&mut s)
+            });
+            match result  {
+                Ok(_) => Ok(Response::with((status::Ok, GzipWriter(s.as_bytes())))),
+                Err(err) => { error!("Error: {}", err); Ok(Response::with(status::Ok)) }
+            }
+        }, "history");
+
         let mut mount = Mount::new();
         mount.mount("/api", router);
         mount.mount("/", Static::new(Path::new("static/")));
 
         let mut chain = Chain::new(mount);
-        chain.link_before(Read::<bodyparser::MaxBodyLength>::one(MAX_BODY_LENGTH));
+        chain.link_before(::persistent::Read::<bodyparser::MaxBodyLength>::one(MAX_BODY_LENGTH));
 
         Iron::new(chain).http("192.168.1.243:80").unwrap();
     }

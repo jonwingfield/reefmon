@@ -9,6 +9,7 @@
 #include "commands.h"
 #include "dbg.h"
 #include "SMBSlave.h"
+#include "rht03.h"
 
 #define BAUD 9600
 #define MYUBRR (F_CPU/16/(BAUD-1))
@@ -33,13 +34,15 @@
 void ioinit(void);      // initializes IO
 static int uart_putchar(char c, FILE *stream);
 static int uart_getchar(FILE* stream);
-static bool uart_available(void);
+/* static bool uart_available(void); */
 void publish_depth_reading(void);
 void publish_temp(void);
+void publish_air_temp_humidity(void);
 void set_channel(uint8_t channel_id, uint8_t intensity);
 void ProcessMessage(SMBData* data);
 void ProcessReceiveByte(SMBData* data);
 inline static void OutputTemp(SMBData* smb);
+inline static void OutputAirTempHumidity(SMBData* smb);
 inline static void OutputDepth(SMBData* smb);
 inline static void SetChannels(SMBData* smb);
 inline static void UndefinedCommand(SMBData *smb);
@@ -55,7 +58,8 @@ ISR(BADISR_vect)
 }
 
 static temp_info last_temp;
-static uint8_t depth_reading;
+static uint16_t depth_reading;
+static temp_humidity_info air_temp_humidity;
 
 int main (void)
 {
@@ -74,8 +78,11 @@ int main (void)
 
     uint8_t i=0;
     while (1) {
-       if (i%5 == 0) {
+       if (i%3 == 0) {
          publish_temp();
+       }
+       if (i%5 == 0) {
+         publish_air_temp_humidity();
        }
 
        publish_depth_reading();
@@ -83,58 +90,6 @@ int main (void)
        _delay_ms(1000);
        i++;
     }
-
-    /* while (1) { */
-    /* char c = '\0'; */
-    /* int count = 0; */
-    /* printf("Waiting for input\n"); */
-    /*   c = getchar(); */
-    /*   if (c == 'D') { */
-    /*     demo(set_channel1); */
-    /*     demo(set_channel2); */
-    /*     demo(set_channel3); */
-    /*     demo(set_channel4); */
-    /*     demo(set_channel5); */
-    /*     demo(set_channel6); */
-    /*   } else if (c == 'S') { */
-    /*     char channel_id = getchar(); */
-    /*     char intensity[4]; */
-    /*     memset(intensity, 0, 4); */
-    /*     int i = 0; */
-    /*     while ((c = getchar()) != ';') { */
-    /*       intensity[i++] = c; */
-    /*     } */
-    /*     uint8_t intensity_i = (uint8_t)atoi(intensity); */
-    /*     set_channel(channel_id - '0', intensity_i); */
-    /*     printf("Set intensity for channel: %c to %u\n", channel_id, intensity_i); */
-    /*   } else if (c == 'T') { */
-    /*     if (therm_read_temp(&temp)) { */
-    /*       double temp_f = c_to_f((double)temp.major + ((double)temp.minor / 10000.0)); */
-    /*       printf("Temperature: %u.%04uC %f\n", temp.major, temp.minor, temp_f); */
-    /*       txbuffer[AQ_TEMP_H] = temp.major; */
-    /*       txbuffer[AQ_TEMP_L] = temp.minor >> 8; */
-    /*       txbuffer[AQ_TEMP_L+1] = temp.minor & 0xff; */
-    /*     } else { */
-    /*       printf("Error reading temperature\n"); */
-    /*     } */
-    /*   } else if (c == 'A') { */
-    /*     char intensity[4]; */
-    /*     memset(intensity, 0, 4); */
-    /*     int i = 0; */
-    /*     while ((c = getchar()) != ';') { */
-    /*       intensity[i++] = c; */
-    /*     } */
-    /*     uint8_t intensity_i = (uint8_t)atoi(intensity); */
-    /*     for (uint8_t j=0; j<6; j++) { */
-    /*       set_channel(j+1, intensity_i); */
-    /*     } */
-    /*     printf("Set intensity for all channels to %u\n", intensity_i); */
-    /*   } else if (c == 'M') { */
-    /*     demo(set_all_channels); */
-    /*   } else { */
-    /*     printf("Got unknown character %c\n", c); */
-    /*   } */
-    /* } */
 
     return(0);
 }
@@ -151,30 +106,65 @@ void publish_temp(void) {
   }
 }
 
+void publish_air_temp_humidity(void) {
+  temp_humidity_info temp_humidity;
+  if (!rht03_temp_and_humidity(&temp_humidity)) {
+    printf("Error reading air temperature/humidity\n");
+  } else {
+    cli();
+    air_temp_humidity = temp_humidity;
+    sei();
+    printf("Got air temp: %u and humidity: %u\n", temp_humidity.temp, temp_humidity.humidity);
+  }
+}
+
 void publish_depth_reading(void) {
-    static uint8_t depth_readings[4];
+    static uint16_t depth_readings[8];
     static uint8_t depth_reading_count = 0;
     static bool first = true;
 
-    ADCSRA |= (1 << ADSC);
+    uint16_t current = 0;
+    uint16_t reading;
+    uint16_t sum = 0;
+    // read 20 times and average it. There doesn't seem to be a ton of sensor noise until it's in an aquarium
+    for (uint8_t i=0; i<20; i++) {
+      reading = 0;
+      ADCSRA |= (1 << ADSC);
 
-    // wait for conversion to complete
-    while (ADCSRA & (1 << ADSC));
-    printf("ADC: %u\n", ADCH);
+      // wait for conversion to complete
+      while (ADCSRA & (1 << ADSC));
+      reading = ADCL;
+      reading |= ((ADCH & 0b11) << 8);
+
+      sum += reading;
+      _delay_ms(1);
+    }
+    sum /= 20;
+    
+    printf("Raw reading: %u\n", current);
 
     if (first) {
       first = false;
-      depth_readings[1] = ADCH;
-      depth_readings[2] = ADCH;
-      depth_readings[3] = ADCH;
+      depth_readings[1] = current;
+      depth_readings[2] = current;
+      depth_readings[3] = current;
+      depth_readings[4] = current;
+      depth_readings[5] = current;
+      depth_readings[6] = current;
+      depth_readings[7] = current;
     }
-    depth_readings[depth_reading_count] = ADCH;
+    depth_readings[depth_reading_count] = current;
     depth_reading_count++;
-    if (depth_reading_count > 3) {
+    if (depth_reading_count > 7) {
       depth_reading_count = 0;
     }
 
-    depth_reading = (uint8_t)(((uint16_t)depth_readings[0] + (uint16_t)depth_readings[1] + (uint16_t)depth_readings[2] + (uint16_t)depth_readings[3]) / (uint16_t)4);
+    uint16_t average = 0;
+    for (uint8_t i=0; i<8; i++) {
+      average += depth_readings[i];
+    }
+    average /= 8;
+    depth_reading = average;
     printf("Depth reading: %u\n", depth_reading);
 }
 
@@ -188,6 +178,9 @@ void ProcessMessage(SMBData* smb)
         break;
       case AQ_CMD_GET_TEMP:
         OutputTemp(smb);
+        break;
+      case AQ_CMD_GET_AIR_TEMP_HUMIDITY:
+        OutputAirTempHumidity(smb);
         break;
       case AQ_CMD_GET_DEPTH:
         OutputDepth(smb);
@@ -211,11 +204,24 @@ inline static void OutputTemp(SMBData* smb)
   smb->state = SMB_STATE_READ_REQUESTED;
 }
 
+inline static void OutputAirTempHumidity(SMBData* smb)
+{
+  smb->txBuffer[0] = (uint8_t)(air_temp_humidity.temp >> 8);
+  smb->txBuffer[1] = (uint8_t)(air_temp_humidity.temp & 0xff);
+  smb->txBuffer[2] = (uint8_t)(air_temp_humidity.humidity >> 8);
+  smb->txBuffer[3] = (uint8_t)(air_temp_humidity.humidity & 0xff);
+  crc_buf(smb->txBuffer, 4);
+  smb->txLength = 5;
+
+  smb->state = SMB_STATE_READ_REQUESTED;
+}
+
 inline static void OutputDepth(SMBData* smb)
 {
-  smb->txBuffer[0] = depth_reading;
-  crc_buf(smb->txBuffer, 1);
-  smb->txLength = 2;
+  smb->txBuffer[0] = (uint8_t)(depth_reading >> 8);
+  smb->txBuffer[1] = (uint8_t)(depth_reading & 0xff);
+  crc_buf(smb->txBuffer, 2);
+  smb->txLength = 3;
 
   smb->state = SMB_STATE_READ_REQUESTED;
 }
@@ -313,7 +319,6 @@ void ioinit (void)
     ADCSRA |= (1 << ADPS2) | (1 << ADPS1); // Prescaler = 64 since we're running at 8MHz. See p 250
     ADMUX |= (1 << REFS0); // use AVCC on pin. Make sure to have a .1uF cap on AVCC/gnd
     // ADMUX defaults to ADC0, nothing to set 
-    ADMUX |= (1 << ADLAR); // left align ADC conversion result so we can just use 8 bits from ADCH if we want
     ADCSRA |= (1 << ADEN); // enable ADC
     ADCSRA |= (1 << ADSC);  // free running mode, start conversion and let it run
 

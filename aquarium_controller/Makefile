@@ -61,7 +61,7 @@ TARGET = aquarium_controller
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c SMBSlave.c ds18b20.c
+SRC = $(TARGET).c SMBSlave.c ds18b20.c rht03.c
 
 
 # List Assembler source files here.
@@ -103,7 +103,7 @@ CSTANDARD = -std=gnu99
 
 
 # Place -D or -U options here
-CDEFS = -DF_CPU=$(F_CPU)UL -DNDEBUG
+CDEFS = -DF_CPU=$(F_CPU)UL #-DNDEBUG
 
 
 # Place -I options here
@@ -319,7 +319,7 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 # Default target.
 all: begin gccversion sizebefore build sizeafter end
 
-build: ds18b20.o SMBSlave.o elf hex eep lss sym
+build: ds18b20.o rht03.o SMBSlave.o elf hex eep lss sym
 
 elf: $(TARGET).elf
 hex: $(TARGET).hex

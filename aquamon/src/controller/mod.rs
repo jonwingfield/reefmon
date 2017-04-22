@@ -25,14 +25,25 @@ pub struct AquariumController {
     live_mode_ticks_remaining: u8,
 }
 
+pub struct Status {
+    pub heater_on: bool,
+    pub ato_pump_on: bool,
+    pub cooler_on: bool,
+}
+
 impl AquariumController {
-    pub fn new(schedule: Schedule, temp_setpoint: Temperature<F>, depth_low: u8, depth_high: u8, depth_calibration: Calibration, temp_stream: Stream<Temperature<F>>, depth_stream: Stream<Depth>) -> AquariumController {
+    pub fn new(schedule: Schedule, temp_min: Temperature<F>, temp_max: Temperature<F>, depth_low: Depth, depth_high: Depth, depth_calibration: Calibration, temp_stream: Stream<Temperature<F>>, depth_stream: Stream<Depth>) -> AquariumController {
         let mut pi_gpio = PiGpio::new();
+        let pin0 =  pi_gpio.take_pin(0, true).unwrap();
+        let pin1 = pi_gpio.take_pin(1, true).unwrap();
+        let pin2 =  pi_gpio.take_pin(2, true).unwrap();
+        let mut pin3 = pi_gpio.take_pin(3, true).unwrap();
+        pin3.turn_on().unwrap();
         AquariumController {
             schedule: schedule,
             live_mode_ticks_remaining: 0,
-            temp_controller: TemperatureController::new(temp_setpoint, pi_gpio.take_pin(0, true).unwrap(), temp_stream),
-            ato_controller: AtoController::new(depth_low, depth_high, depth_calibration, pi_gpio.take_pin(1, true).unwrap(), depth_stream),
+            temp_controller: TemperatureController::new(temp_min, temp_max, pin0, pin2, temp_stream),
+            ato_controller: AtoController::new(depth_low, depth_high, depth_calibration, pin1, depth_stream),
         }
     }
 
@@ -41,11 +52,11 @@ impl AquariumController {
         self.schedule = schedule;
     }
 
-    pub fn set_temp_setpoint(&mut self, set_point: Temperature<F>) {
-        self.temp_controller.set_setpoint(set_point);
+    pub fn set_temp_range(&mut self, min: Temperature<F>, max: Temperature<F>) {
+        self.temp_controller.set_range(min, max);
     }
 
-    pub fn set_depth_settings(&mut self, low: u8, high: u8, calibration: Calibration) {
+    pub fn set_depth_settings(&mut self, low: Depth, high: Depth, calibration: Calibration) {
         self.ato_controller.set_settings(low, high, calibration)
     }
 
@@ -54,8 +65,17 @@ impl AquariumController {
             .map_or(Ok(()), |tick| self.run(devices, tick))
     }
 
+    pub fn status(&mut self) -> Status {
+        let temp_status = self.temp_controller.status();
+        Status {
+            heater_on: temp_status.0,
+            cooler_on: temp_status.1,
+            ato_pump_on: self.ato_controller.status(),
+        }
+    }
+
     // Run loop for when a tick overflows
-    fn run(&mut self, devices: &mut Devices, tick_m: u64) -> io::Result<()> {
+    fn run(&mut self, devices: &mut Devices, tick_s: u64) -> io::Result<()> {
         let local_time = UTC::now().with_timezone(&Local);
         // shift the current time because the scheule legs use a NaiveTime
         let time = local_time.time();
@@ -64,18 +84,18 @@ impl AquariumController {
 
         devices.set_intensities(&intensities)
             .map_err(From::from)
-            .and_then(|_| self.temp_controller.tick(tick_m))
-            .and_then(|_| self.ato_controller.tick(tick_m))
+            .and_then(|_| self.temp_controller.tick(tick_s))
+            .and_then(|_| self.ato_controller.tick(tick_s))
     }
 
     // increments the tick counter and returns Some if it overflowed
     fn next_tick(&mut self, ticks: u64) -> Option<u64> {
-        if ticks % 60000 == 0 {
+        if ticks % 30000 == 0 {
             if self.live_mode_ticks_remaining > 0 { 
                 self.live_mode_ticks_remaining -= 1; 
                 None
             } else {
-                Some(ticks / 60000)
+                Some(ticks / 1000)
             }
         } else {
             None

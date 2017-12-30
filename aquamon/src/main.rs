@@ -16,6 +16,7 @@ use std::fs::{OpenOptions, File};
 use std::error::Error;
 use std::sync::mpsc::{channel, TryRecvError, Receiver};
 use std::sync::{RwLock, Arc};
+use std::process::Command;
 use chrono::{Local,NaiveTime};
 use carboxyl::Signal;
 
@@ -28,14 +29,16 @@ use aquamon::uom::temp::Temperature;
 use aquamon::devices::{Devices,Depth};
 use aquamon::controller::{AquariumController, Calibration};
 use aquamon::controller::schedule::{Schedule, ScheduleLeg};
+use aquamon::controller::doser::Dose;
 use aquamon::controller::Status;
 
 use aquamon_server::server::Status as StatusDto;
 use aquamon_server::server::LightingSchedule as ScheduleDto;
-use aquamon_server::server::Config as ConfigDto;
-use aquamon_server::server::{Settings, Commands, LightSettings, TemperatureSettings, DepthSettings, DepthSettingsMaintain, DepthSettingsDepthValues};
+use aquamon_server::server::{Settings, Commands, LightSettings, TemperatureSettings, DepthSettings, DepthSettingsMaintain, DepthSettingsDepthValues, LiveModeSettings, DoserSettings};
 
-const TICK_MS: u16 = 10;
+use aquamon::alerting::alert;
+
+const TICK_MS: u64 = 10;
 
 fn main() {
     init_logging();
@@ -43,18 +46,27 @@ fn main() {
         temperature_settings: TemperatureSettings { min: 79.5, max: 80.5 },
         depth_settings: DepthSettings { 
             maintainRange: DepthSettingsMaintain { low: 0, high: 1},
-            depthValues: DepthSettingsDepthValues { low: 0, high: 4096, highInches: 10.0, tankSurfaceArea: 17*10, pumpGph: 50.0 }
+            depthValues: DepthSettingsDepthValues { low: 0, high: 4096, highInches: 10.0, tankSurfaceArea: 17*10, tankVolume: 10.0, pumpGph: 50.0 }
         },
         lighting_schedule: ScheduleDto {
             schedule: vec![
                 LightSettings { intensity: 0, intensities: [0_u8; 6], startTime: "09:00".to_string() },
                 LightSettings { intensity: 0, intensities: [0_u8; 6], startTime: "17:00".to_string() },
             ]
+        },
+        doser_settings: DoserSettings {
+            pumpRateMlMin: 1.1,
+            schedule: vec![],
+            doseAmountMl: 1.1,
+            doseRangeStart: 7,
+            doseRangeEnd: 18,
         }
     });
 
+    let mut i:u64 = 0;
+
     let (status_lock, rx_live, rx_commands) = start_server(&settings_dto);
-    let mut devices = Devices::new(1).unwrap();
+    let mut devices = Devices::new(1, 1).unwrap();
     let temp = Temperature::in_f(80.0);
     let temp_signal = devices.temp_stream()
         .fold((temp, temp, temp, temp), |(b,c,d,_), a| (a,b,c,d))
@@ -65,8 +77,9 @@ fn main() {
     let humidity_signal = devices.humidity_stream()
         .fold((50.0, 50.0, 50.0, 50.0), |(b,c,d,_), a| (a,b,c,d))
         .map(|(a,b,c,d)| ((a + b + c + d) / 4.0 * 10.0).round() as f32 / 10.0);
+    let ph_signal = devices.ph_stream().hold(8.0);
     let depth_signal = devices.depth_stream().hold(61 * 4);
-    let mut controller = AquariumController::new(Schedule::default(), 
+    let mut controller = AquariumController::new(map_schedule(&settings_dto.lighting_schedule), 
                                                  Temperature::in_f(settings_dto.temperature_settings.min),
                                                  Temperature::in_f(settings_dto.temperature_settings.max),
                                                  settings_dto.depth_settings.maintainRange.low,
@@ -76,10 +89,10 @@ fn main() {
                                                      high: settings_dto.depth_settings.depthValues.high,
                                                      high_inches: settings_dto.depth_settings.depthValues.highInches,
                                                      tank_surface_area: settings_dto.depth_settings.depthValues.tankSurfaceArea,
+                                                     tank_volume: settings_dto.depth_settings.depthValues.tankVolume,
                                                      pump_gph: settings_dto.depth_settings.depthValues.pumpGph,
-                                                 }, devices.temp_stream(), devices.depth_stream()); 
-
-    let mut i:u64 = 0;
+                                                 }, devices.temp_stream(), devices.depth_stream(),
+                                                 settings_dto.doser_settings.pumpRateMlMin);
     loop {
         match rx_live.try_recv() {
             Ok(config_dto) => {
@@ -90,14 +103,7 @@ fn main() {
                     start_time: NaiveTime::from_hms(0,0,0)
                 };
 
-                match controller.live_mode(&mut devices, leg, 1) {
-                    Err(err) => {
-                        error!("Failed to write: {:?}. Need to retry this operation until it succeeds", err);
-                    }, 
-                    Ok(_) => {
-                        trace!("Wrote intensities");
-                    }
-                }
+                controller.live_mode(i * TICK_MS, leg);
             }, 
             Err(err) if err == TryRecvError::Disconnected => {
                 panic!("Web server disconnected!");
@@ -109,12 +115,7 @@ fn main() {
             Ok(commands) => {
                 match commands.lighting_schedule {
                     Some(schedule_dto) => {
-                        let schedule = Schedule::new(schedule_dto.schedule.iter().map(|l| ScheduleLeg {
-                            intensity: l.intensity,
-                            intensities: l.intensities,
-                            start_time: NaiveTime::parse_from_str(&l.startTime, "%H:%M").unwrap()
-                        }).collect());
-
+                        let schedule = map_schedule(&schedule_dto); 
                         controller.schedule_updated(schedule);
 
                         settings_dto.lighting_schedule = schedule_dto;
@@ -139,10 +140,37 @@ fn main() {
                                                           high_inches: settings_dto.depth_settings.depthValues.highInches,
                                                           tank_surface_area: settings_dto.depth_settings.depthValues.tankSurfaceArea,
                                                           pump_gph: settings_dto.depth_settings.depthValues.pumpGph,
+                                                          tank_volume: settings_dto.depth_settings.depthValues.tankVolume,
                                                       });
                         settings_dto.depth_settings = depth_settings;
                     },
                     None => {}
+                }
+                if let Some(toggles) = commands.toggles {
+                    if let Err(err) = controller.enable_pump(toggles.pump, i * TICK_MS) {
+                        error!("Error enabling pump: {}", err);
+                    }
+                }
+                if let Some(viewing_mode) = commands.viewing_mode {
+                    let lights = viewing_mode.lights;
+                    let leg = ScheduleLeg { 
+                        intensity: lights.intensity,
+                        intensities: lights.intensities,
+                        start_time: NaiveTime::from_hms(0,0,0)
+                    };
+                    controller.set_viewing_mode(viewing_mode.on, i * TICK_MS, leg);
+                }
+                if let Some(doser_settings) = commands.doser_settings {
+                    controller.set_doser_settings(
+                        doser_settings.pumpRateMlMin,
+                        doser_settings.schedule.iter().map(|leg| Dose {
+                            dose_amount_ml: leg.doseAmountMl,
+                            start_time: parse_time(&leg.startTime),
+                        }).collect());
+                    settings_dto.doser_settings = doser_settings;
+                }
+                if commands.garage_door_opener.is_some() {
+                    open_garage_door();
                 }
                 save_settings(&settings_dto);
             }, 
@@ -160,6 +188,7 @@ fn main() {
                 status.depth = depth_signal.sample();
                 status.airTempF = air_temp_signal.sample();
                 status.humidity = humidity_signal.sample();
+                status.pH = ph_signal.sample();
             },
             Err(err) => error!("error ticking devices: {:?}", err)
         }
@@ -170,8 +199,11 @@ fn main() {
 
         if i % (30000 / TICK_MS as u64) == 0 {
             let status = controller.status();
-            if let Err(result) = write_csv(&temp_signal, &depth_signal, &air_temp_signal, &humidity_signal, status) {
+            if let Err(result) = write_csv(&temp_signal, &depth_signal, &air_temp_signal, &humidity_signal, &ph_signal, &status) {
                 error!("Could not write csv data: {}", result);
+            }
+            if let Err(result) = alert(&status.alerts) {
+                error!("Error sending alerts: {:?}", result);
             }
         }
 
@@ -179,9 +211,21 @@ fn main() {
     }
 }
 
-fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<ConfigDto>, Receiver<Commands>) {
+fn parse_time(time: &String) -> NaiveTime {
+    NaiveTime::parse_from_str(&time, "%H:%M").unwrap()
+}
+
+fn map_schedule(schedule_dto: &ScheduleDto) -> Schedule {
+    Schedule::new(schedule_dto.schedule.iter().map(|l| ScheduleLeg {
+        intensity: l.intensity,
+        intensities: l.intensities,
+        start_time: NaiveTime::parse_from_str(&l.startTime, "%H:%M").unwrap()
+    }).collect())
+}
+
+fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<LiveModeSettings>, Receiver<Commands>) {
     let (tx, rx) = channel();
-    let status = StatusDto { currentTempF: 0.0, depth: 0, airTempF: 0.0, humidity: 0.0 };
+    let status = StatusDto { currentTempF: 0.0, depth: 0, airTempF: 0.0, humidity: 0.0, pH: 0.0 };
     let status_lock = Arc::new(RwLock::new(status));
     let status_return = status_lock.clone();
     let (tx_c, rx_c) = channel();
@@ -194,7 +238,7 @@ fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<Config
     (status_return, rx, rx_c)
 }
 
-fn write_csv(temp: &Signal<f32>, depth: &Signal<Depth>, air_temp: &Signal<f32>, humidity: &Signal<f32>, status: Status) -> io::Result<()> {
+fn write_csv(temp: &Signal<f32>, depth: &Signal<Depth>, air_temp: &Signal<f32>, humidity: &Signal<f32>, ph_signal: &Signal<f32>, status: &Status) -> io::Result<()> {
     let file_opened = OpenOptions::new()
         .write(true)
         .create(true)
@@ -202,7 +246,7 @@ fn write_csv(temp: &Signal<f32>, depth: &Signal<Depth>, air_temp: &Signal<f32>, 
         .open("history.csv");
 
     file_opened.and_then(|mut file| {
-        file.write_all(format!("{},{},{},{},{},{},{},{}\n", 
+        file.write_all(format!("{},{},{},{},{},{},{},{},{}\n", 
                            Local::now().format("%Y-%m-%dT%H:%M:%S%z"), 
                            temp.sample(),
                            depth.sample(),
@@ -210,7 +254,8 @@ fn write_csv(temp: &Signal<f32>, depth: &Signal<Depth>, air_temp: &Signal<f32>, 
                            status.ato_pump_on,
                            status.cooler_on,
                            air_temp.sample(),
-                           humidity.sample()).as_bytes())
+                           humidity.sample(), 
+                           ph_signal.sample()).as_bytes())
             .and_then(|_| file.sync_data())
     })
 }
@@ -254,4 +299,15 @@ fn init_logging() {
         builder.parse(&env::var("RUST_LOG").unwrap());
     }
     builder.init().unwrap();
+}
+
+fn open_garage_door() {
+    info!("Opening garage door");
+    match Command::new("sh")
+        .arg("-c")
+        .arg("ssh -i /home/pi/.ssh/id_rsa_pi1 pi@pi1 './open_garage_door.sh'")
+        .output() {
+            Err(e) => error!("Could not open garage door: {:?}", e),
+            Ok(output) => info!("Opening garage door: {:?}", output)
+    }
 }

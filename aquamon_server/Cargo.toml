@@ -23,6 +23,9 @@ git = "https://github.com/iron/body-parser.git"
 [dependencies.persistent]
 version = "*"
 
+[dependencies.urlencoded]
+version = "*"
+
 [dependencies]
 serde = "*"
 serde_derive = "*"

@@ -40,7 +40,7 @@
 
 
 # MCU name
-MCU = atmega328p
+MCU = atmega328pb
 
 
 # Use http://www.engbedded.com/fusecalc/ to calculate the fuse bits
@@ -103,7 +103,7 @@ CSTANDARD = -std=gnu99
 
 
 # Place -D or -U options here
-CDEFS = -DF_CPU=$(F_CPU)UL #-DNDEBUG
+CDEFS = -DF_CPU=$(F_CPU)UL -DNDEBUG -DMEGA328PB
 
 
 # Place -I options here

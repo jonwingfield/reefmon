@@ -148,3 +148,4 @@ input[type=range]:focus::-ms-fill-upper {
 .outOfRange { color: red; }
 
 #airTemp, #humidity { color: blue; font-weight: bold; }
+#pH { font-weight: bold; }

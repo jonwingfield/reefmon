@@ -55,7 +55,10 @@
       <div>Start time: <span id="startTime" /></div>
       <div>
       <button id="saveButton">Save</button>
-      <input type="checkbox" id="liveMode">&nbsp;<label for="liveMode">Live Mode</label>
+        <input type="checkbox" id="liveMode">&nbsp;<label for="liveMode">Live Mode</label>
+      </div>
+      <div>
+        <input type="checkbox" id="viewingMode" /> <label for="viewingMode">Viewing Mode</label>
       </div>
       <div>
         <button id="preview">Preview</button><input type="range" id="previewSpeed" value="2" min="1" max="10" />
@@ -64,14 +67,23 @@
     <section id="schedule">
       <svg id="lightingGraph" width="700" height="300"></div>
     </section>
+    <section id="toggles">
+      <div>
+        <input type="checkbox" id="pumpToggle" checked /> <label for="pumpToggle">Pump</label>
+      </div>
+    </section>
     <section> 
       <div>
         <h3>Temperature: <span id="current_temp"></span></h3>
         <label for="temperatureSetPoint">Temperature Range</label> <input type="number" id="temperatureMin" min="68" max="84" style="width:7em" /> - 
           <input type="number" id="temperatureMax" min="68" max="84" style="width:7em" />
         <button id="updateTempSettings">Update</button>
+        <svg id="temperatureGraph" width="700" height="200"></div>
         <div>Air Temperature: <span id="airTemp"></span></div>
         <div>Humidity: <span id="humidity"></span></div>
+      </div>
+      <div>
+        <div>pH: <span id="pH"></span></div>
       </div>
       <div>
         <h3>Water Level: <span id="current_depth_inches"></span> <small>(<span id="current_depth"></span>)</small></h3>
@@ -88,6 +100,9 @@
             <label for="tankSurfaceArea">Tank Surface Area:</label> <input type="number" id="tankSurfaceArea" min="50" max="1000" />
           </div>
           <div>
+            <label for="tankVolume">Tank Volume:</label> <input type="number" id="tankVolume" min="5" max="500" /> gal
+          </div>
+          <div>
             <label for="pumpGph">Pump GPH:</label> <input type="number" id="pumpGph" min="0.1" max="500" />
           </div>
         </fieldset>
@@ -96,6 +111,35 @@
       <div style="margin-top: 2em">
         <p><a href="history.html">History</a></p>
       </div>
+    </section>
+    <section id="dosing">
+      <div>
+        <h3>Dosing</h3>
+        <label for="pumpRate">Pump Rate: </label>
+        <input type="number" id="pumpRate" style="width: 7em" min="0.5" max="10" /> mL/min
+        <fieldset>
+          <div>
+            <label for="doseAmount">Daily Amount: </label>
+            <input type="number" id="doseAmount" style="width: 7em" min="0.5" max="40" /> mL
+          </div>
+          <div>
+            <label for="doseRangeStart">Dose range start (hours only, 24 hour time): </label>
+            <input type="number" id="doseRangeStart" style="width: 7em" min="0" max="24" value="7" /> - 
+            <input type="number" id="doseRangeEnd" style="width: 7em" min="0" max="24" value="18" />  
+          </div>
+          <div><em>Automatically splits dosing so that alkalinity is never raised by more than 0.1dKh at a time (<span id="calculatedMaxDose"></span>).</em></div>
+        </fieldset>
+      </div>
+      <button id="updateDosing">Update</button>
+    </section>
+    <section style="margin-top: 100px; margin-bottom: 100px;">
+      <a href="" id="videoLink">Camera Monitoring</a>
+      <script type="text/javascript">
+        $('#videoLink').attr('href', 'http://' + location.href.split('/')[2].split(':')[0] + ':8000/html/');
+      </script>
+    </section>
+    <section style="margin-top: 100px; margin-bottom: 50px;">
+      <button id="gdo">GDO</button>
     </section>
 
   </body>

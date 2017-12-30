@@ -26,6 +26,14 @@
 #include "SMBSlave.h"
 #include "commands.h"
 
+// atmega328pb defines
+#ifdef MEGA328PB
+#define TWAR TWAR1
+#define TWCR TWCR1
+#define TWDR TWDR1
+#define TWSR TWSR1
+#endif
+
 #ifdef SMB_USE_PEC_LOOKUP
 inline static void SMBcrc(unsigned char data);
 #endif

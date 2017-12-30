@@ -1,6 +1,7 @@
 /* globals $, moment */
 $(function() {
   var liveMode = false;
+  var viewingMode = false;
 
   $.getJSON('/api/settings/lighting/schedule').then(function(response) {
     var configData = response.schedule;
@@ -13,7 +14,7 @@ $(function() {
         setPercent(this);
       }).get();
       
-      if (liveMode) {
+      if (liveMode || viewingMode) {
         updateLive(selected);
       }
     });
@@ -27,12 +28,12 @@ $(function() {
       }
     });
 
-    var updateLive = function(data) {
+    var updateLive = function(data, on) {
         console.log("Previewing: ", data.startTime, data.intensity, data.intensities);
         return $.ajax({
           type: 'POST',
           url: '/api/lighting/live',
-          data: JSON.stringify({ lights: data }),
+          data: JSON.stringify({ lights: data, on: !!on }),
           contentType: 'application/json'
         });
     };
@@ -110,9 +111,46 @@ $(function() {
 
     $('#liveMode').on('change', function() {
       liveMode = $(this).is(':checked');
-      if (liveMode) {
-        updateLive(selected);
-      }
+      updateLive(selected, liveMode);
+    });
+
+    var updateToggles = function(toggles) {
+      return $.ajax({
+        url: '/api/toggles/',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(toggles),
+      });
+    };
+
+    $('#pumpToggle').on('change', function() {
+      updateToggles({ pump: $(this).is(':checked') });
+    });
+
+    var enableViewingMode = function(on) {
+        if (viewingMode === on) { return; }
+        viewingMode = on;
+        if (viewingMode) {
+          selectedOld = selected;
+          selected = $.extend({}, selected, true);
+          console.log("Viewing Mode: ", selected.startTime, selected.intensity, selected.intensities);
+          $('#lightingGraph').hide();
+        } else { 
+          console.log("Viewing Mode off");
+          selected = selectedOld;
+          $('#lightingGraph').show();
+        }
+
+        return $.ajax({
+          type: 'POST',
+          url: '/api/viewingMode/',
+          data: JSON.stringify({ lights: selected, on: viewingMode }),
+          contentType: 'application/json'
+        });
+    }
+
+    $('#viewingMode').on('change', function() {
+      enableViewingMode($(this).is(':checked'));
     });
 
     var setPercent = function(el) {
@@ -134,13 +172,16 @@ $(function() {
     };
 
     var selected = configData[0];
+    var selectedOld;
     updateSliders(selected);
 
     var onSchedulePointSelected = function(data) {
+      enableViewingMode(false);
       updateSliders(data);
     };
 
     var onItemAdded = function(index, prevItem, time, intensity) {
+      enableViewingMode(false);
       var data = $.extend(true, {}, prevItem);
       if (index === 0 || index === configData.length) {
         intensity = 0;
@@ -157,6 +198,7 @@ $(function() {
     };
 
     var onItemUpdated = function(data, time, intensity) {
+      enableViewingMode(false);
       data.intensity = Math.round(intensity, 0);
       data.startTime = time;
       $('#intensitySlider').val(data.intensity);
@@ -164,6 +206,7 @@ $(function() {
     };
 
     var onItemDeleted = function(index, data) {
+      enableViewingMode(false);
       configData.splice(index, 1);
       graph.dataUpdated(configData);
       $('#intensitySlider').val(data.intensity);
@@ -199,6 +242,13 @@ $(function() {
       whole = whole + " ";
     }
 
+    if (top === 0) {
+      return whole + '"';
+    }
+    if (top === bottom) {
+      return whole + top + '"';
+    }
+
     return whole + "" + top + "/" + bottom + '"';
   };
 
@@ -206,6 +256,7 @@ $(function() {
     $.getJSON('/api/status').then(function(data) {
       var temp = $('#current_temp').html(data.currentTempF + 'F');
       var depth = $('#current_depth').html(data.depth);
+      var pH = $('#pH').html(data.pH);
       $('#airTemp').html(data.airTempF + 'F');
       $('#humidity').html(data.humidity + '%');
 
@@ -234,6 +285,11 @@ $(function() {
       } else {
         temp.addClass('inRange').removeClass('outOfRange');
       }
+      if (data.pH <= 7.9 || data.pH > 8.40) {
+        pH.addClass('outOfRange').removeClass('inRange');
+      } else {
+        pH.removeClass('outOfRange').addClass('inRange');
+      }
     });
   };
   window.setInterval(updateStatus, 1000);
@@ -261,7 +317,7 @@ $(function() {
     e.preventDefault();
     var settings = { 
       maintainRange: { low: getIntValue('#waterLevelLow'), high: getIntValue('#waterLevelHigh') },
-      depthValues: { low: getIntValue('#minDepthValue'), high: getIntValue('#maxDepthValue'), highInches: getFloatValue('#maxDepthInches'), tankSurfaceArea: getIntValue('#tankSurfaceArea'), pumpGph: getFloatValue('#pumpGph') }
+      depthValues: { low: getIntValue('#minDepthValue'), high: getIntValue('#maxDepthValue'), highInches: getFloatValue('#maxDepthInches'), tankSurfaceArea: getIntValue('#tankSurfaceArea'), pumpGph: getFloatValue('#pumpGph'), tankVolume: getFloatValue('#tankVolume') }
     };
 
     $.post('/api/settings/depth', JSON.stringify(settings));
@@ -274,8 +330,59 @@ $(function() {
     $('#maxDepthValue').val(data.depthValues.high);
     $('#maxDepthInches').val(data.depthValues.highInches);
     $('#tankSurfaceArea').val(data.depthValues.tankSurfaceArea);
+    $('#tankVolume').val(data.depthValues.tankVolume);
     $('#pumpGph').val(data.depthValues.pumpGph);
 
     updateStatus();
+  });
+
+  /** 
+   * Dosing 
+   */
+
+  var calculateMaxDose = function(volume) { return 0.7 * volume / 10.0; };
+
+  $('#tankVolume').on('change', function() {
+    var volume = getFloatValue('#tankVolume');
+    $('#calculatedMaxDose').html(calculateMaxDose(volume));
+  });
+
+  $('#updateDosing').click(function(e) {
+    e.preventDefault();
+    var doseAmountMl = getFloatValue('#doseAmount');
+    var maxDose = calculateMaxDose(getFloatValue('#tankVolume'));
+    var numDoses = Math.ceil(doseAmountMl / maxDose);
+    
+    var startHour = getIntValue('#doseRangeStart'),
+        endHour = getIntValue('#doseRangeEnd'),
+        doseSpacing = Math.round((endHour - startHour) / numDoses);
+
+    var schedule = Array(numDoses).map(function(_, i) {
+      return { 
+        startTime: (startHour + i * doseSpacing) + ":00",
+        doseAmountMl: (doseAmountMl / numDoses).toFixed(2),
+      };
+    });
+
+    var settings = {
+      pumpRateMlMin: getFloatValue('#pumpRate'),
+      doseAmountMl: doseAmountMl,
+      doseRangeStart: startHour,
+      doseRangeEnd: endHour,
+      schedule: schedule,
+    };
+
+    $.post('/api/settings/dosing', JSON.stringify(settings));
+  });
+
+  $.getJSON('/api/settings/dosing').then(function(data) {
+    $('#pumpRate').val(data.pumpRate);
+    $('#doseAmount').val(data.doseAmountMl);
+    $('#doseRangeStart').val(data.doseRangeStart);
+    $('#doseRangeEnd').val(data.doseRangeEnd);
+  });
+
+  $('#gdo').on('click', function() {
+    $.post('/api/gdo/', "{}");
   });
 });

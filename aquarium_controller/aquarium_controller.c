@@ -25,10 +25,11 @@
 #define set_channel4(a)  OCR1B = (a)
 #define set_channel5(a)  OCR2A = (a)
 #define set_channel6(a)  OCR2B = (a)
+#ifdef MEGA328PB
+#define set_channel7(a)  OCR3A = (a)
+#define set_channel8(a)  OCR3B = (a)
+#endif
 
-#define demo(a)   { for (uint16_t __i=0; __i<256; __i++) { a((uint8_t)__i); for (uint16_t j=255-__i; j<255; j++) { _delay_ms(10); } }\
-                    for (uint16_t __i=255; __i>0; __i--) { a((uint8_t)__i); for (uint16_t j=255-__i; j<255; j++) { _delay_ms(10); } }\
-                    a(0); } 
 //Define functions
 //======================
 void ioinit(void);      // initializes IO
@@ -73,7 +74,7 @@ int main (void)
     printf("Starting up!...\n");
     
     for (uint8_t j=0; j<6; j++) {
-      set_channel(j+1, 0);
+      set_channel(j+1, (j+1)*30);
     }
 
     uint8_t i=0;
@@ -230,13 +231,15 @@ inline static void OutputDepth(SMBData* smb)
 inline static void SetChannels(SMBData* smb) 
 {
   /* uint8_t byteCount = smb->rxBuffer[1]; */
-  if (crc_verify_buf(smb->rxBuffer+2, 6)) {
+  if (crc_verify_buf(smb->rxBuffer+2, 8)) {
     set_channel1(smb->rxBuffer[2]);
     set_channel2(smb->rxBuffer[3]);
     set_channel3(smb->rxBuffer[4]);
     set_channel4(smb->rxBuffer[5]);
     set_channel5(smb->rxBuffer[6]);
     set_channel6(smb->rxBuffer[7]);
+    set_channel7(smb->rxBuffer[8]);
+    set_channel8(smb->rxBuffer[9]);
 
     smb->state = SMB_STATE_IDLE;
   } 
@@ -267,6 +270,8 @@ void set_channel(uint8_t channel_id, uint8_t intensity) {
     case 4: set_channel4(intensity); break;
     case 5: set_channel5(intensity); break;
     case 6: set_channel6(intensity); break;
+    case 7: set_channel7(intensity); break;
+    case 8: set_channel8(intensity); break;
     default: break;
   }
 }
@@ -313,6 +318,20 @@ void ioinit (void)
     // 256 prescaler
     sbi(TCCR2B, CS22);
     sbi(TCCR2B, CS21);
+
+#ifdef MEGA328PB
+    // TIMER3 (Atmega328pb only)
+    DDRD |= (1 << DDD0);
+    DDRD |= (1 << DDD2);
+
+    sbi(TCCR3A, COM3A1);
+    sbi(TCCR3A, COM3B1);
+    // 8-bit compare, phase corrected
+    sbi(TCCR3A, WGM30);
+    // IMPORTANT: Meanwell requires a PWM frequency of 100 - 1000hZ
+    sbi(TCCR3B, CS10); // 64 prescaler
+    sbi(TCCR3B, CS11); // 64 prescaler
+#endif
 
     // ADC Setup
     

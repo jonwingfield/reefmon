@@ -36,6 +36,10 @@ impl GpioPin {
                     })
     }
 
+    pub fn set(&mut self, value: bool) -> io::Result<()> {
+        self.pin.set_value(if value ^ self.active_low { 1 } else { 0 }).map_err(from_gpio_error)
+    }
+
     pub fn turn_on(&mut self) -> io::Result<()> {
         self.pin.set_value(if self.active_low { 0 } else { 1 }).map_err(from_gpio_error)
     }

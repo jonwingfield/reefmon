@@ -1,9 +1,11 @@
 use chrono::{NaiveTime};
 
+pub type Intensities = [u8; 6]; 
+
 #[derive(Debug)]
 pub struct ScheduleLeg {
     pub intensity: u8,
-    pub intensities: [u8; 6],
+    pub intensities: Intensities,
     pub start_time: NaiveTime,
 }
 
@@ -12,7 +14,30 @@ pub struct Schedule {
     legs: Vec<ScheduleLeg>,
 }
 
+pub fn interpolated_intensity(a: &Intensities, b: &Intensities, percent: f32) -> Intensities {
+    if percent <= 0.0 { return a.clone(); }
+    if percent >= 1.0 { return b.clone(); }
+
+    let mut intensities = [0_u8; 6];
+     
+    for i in 0..6 {
+        let interpolated = a[i] as f32 + (b[i] as f32 - a[i] as f32) * percent;
+        assert!(interpolated >= 0.0);
+        intensities[i] = interpolated.round() as u8;
+    }
+
+    intensities
+}
+
 impl ScheduleLeg {
+    pub fn default() -> ScheduleLeg {
+        ScheduleLeg { 
+            intensity: 0,  
+            intensities: [0_u8; 6],
+            start_time: NaiveTime::from_hms(0,0,0),
+        }
+    }
+
     pub fn weighted_intensity(&self, index: usize) -> u8 {
         let intensity = self.intensity as f32 / 255.0;
 
@@ -24,6 +49,21 @@ impl ScheduleLeg {
          
         for i in 0..6 {
             intensities[i] = self.weighted_intensity(i);
+        }
+
+        intensities
+    }
+
+    fn interpolated_intensity(&self, other: &ScheduleLeg, percent: f32) -> Intensities {
+        let mut intensities = [0_u8; 6];
+         
+        for i in 0..6 {
+            let ai = self.weighted_intensity(i) as f32;
+            let bi = other.weighted_intensity(i) as f32;
+
+            let interpolated = ai + (bi - ai) * percent;
+            assert!(interpolated >= 0.0);
+            intensities[i] = interpolated.round() as u8;
         }
 
         intensities
@@ -62,19 +102,8 @@ impl Schedule {
     fn calc_intensities(current_time: NaiveTime, a: &ScheduleLeg, b: &ScheduleLeg) -> [u8; 6] {
         let minutes_in_interval = b.start_time.signed_duration_since(a.start_time).num_minutes() as f32;
         let elapsed_minutes = current_time.signed_duration_since(a.start_time).num_minutes() as f32;
-
-        let mut intensities = [0_u8; 6];
-         
-        for i in 0..6 {
-            let ai = a.weighted_intensity(i) as f32;
-            let bi = b.weighted_intensity(i) as f32;
-
-            let interpolated = ai + (bi - ai) / minutes_in_interval.max(1.0) * elapsed_minutes;
-            assert!(interpolated >= 0.0);
-            intensities[i] = interpolated.round() as u8;
-        }
-
-        intensities
+        let percent_elapsed = elapsed_minutes / minutes_in_interval.max(1.0);
+        a.interpolated_intensity(b, percent_elapsed)
     }
 }
 

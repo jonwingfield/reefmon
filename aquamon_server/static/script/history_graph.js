@@ -1,6 +1,17 @@
-var point_limit = 60*2*12;
+/* globals $, d3, moment */
+function getParameterByName(name, url) {
+    if (!url) { url = window.location.href; }
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) { return null; }
+    if (!results[2]) { return ''; }
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
 
-/* globals $, d3 */
+var hours = parseInt(getParameterByName("hours") || "12", 10);
+var point_limit = 60*2*hours;
+
 function linearRegression(x, y){
 		var lr = {};
 		var n = y.length;
@@ -26,8 +37,11 @@ function linearRegression(x, y){
 		return lr;
 }
 
+var xTrackingLines = [];
+var xTrackingTexts = [];
+
 // returns slope, intercept and r-square of the line
-var history_graph = function(data, chartId, yLabel, data2, y2Label) {
+var history_graph = function(data, chartId, yLabel, data2, y2Label, decimalPlaces = 1, avgPoints = 10) {
   var sum = function(a) { return a.reduce((a,b) => a + b, 0); };
   var average = function (array) { return sum(array) / array.length; };
   var movingAverage = function(a, n) {
@@ -41,6 +55,8 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
   };
 
   $(chartId).empty();
+
+  $(chartId).attr('width', $(window).width() - 20);
 
   var svg = d3.select(chartId),
     margin = { top: 20, right: 20, bottom: 30, left: 50 },
@@ -98,8 +114,7 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
     .attr("stroke-linejoin", "round")
     .attr("stroke-linecap", "round")
     .attr("stroke-width", 2.0)
-    .attr("d", line(movingAverage(data, 10)));
-  
+    .attr("d", line(movingAverage(data, avgPoints)));
 
   var regressionLine = linearRegression(data.map(d => x(d.timestamp)), data.map(d => y(d.value)));
   var max = d3.max(data, d => x(d.timestamp));
@@ -165,12 +180,31 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
     .style('opacity', 0)
     .style("stroke", "#ddd");
 
+  xTrackingLines.push(g.append("line")
+    .attr("x1", 0)
+    .attr("y1", 0)
+    .attr("x2", 0)
+    .attr("y2", data2 ? height + height2 : height)
+    .style('opacity', 0)
+    .style("stroke", "#ddd"));
+
+  xTrackingTexts.push(g.append("text")
+        .attr("fill", "#999")
+        .attr("y", 0)
+        .attr("x", 0)
+        .attr("dy", "0.71em")
+        .attr("text-anchor", "start")
+        .style('text-shadow', '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff')
+        .style("opacity", 0)
+        .text(""));
+
   var trackingText = g.append("text")
         .attr("fill", "#999")
         .attr("y", 0)
         .attr("x", width - 10)
         .attr("dy", "0.71em")
         .attr("text-anchor", "end")
+        .style('text-shadow', '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff')
         .style("opacity", 0)
         .text("");
 
@@ -188,7 +222,16 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
       trackingText.style('opacity', 1);
     }
 
-    var value = (Math.round(y.invert(posy) * 10) / 10).toFixed(1);
+    if (posx < 0 || posx > width) {
+      xTrackingLines.forEach(xTrackingLine => xTrackingLine.style('opacity', 0));
+      xTrackingTexts.forEach(xTrackingText => xTrackingText.style('opacity', 0));
+    } else {
+      xTrackingLines.forEach(xTrackingLine => xTrackingLine.style('opacity', 1));
+      xTrackingTexts.forEach(xTrackingText => xTrackingText.style('opacity', 1));
+    }
+
+    var xValue = moment(x.invert(posx)).format("h:mm a");
+    var value = (Math.round(y.invert(posy) * Math.pow(10, decimalPlaces)) / Math.pow(10, decimalPlaces)).toFixed(decimalPlaces);
     if (data2) {
       if (posy > height && posy < height + height2) {
         trackingLine.style('opacity', 1);
@@ -197,6 +240,7 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
       }
     }
 
+
     trackingLine
       // .style('opacity', 1)
       .attr('y1', posy)
@@ -204,6 +248,15 @@ var history_graph = function(data, chartId, yLabel, data2, y2Label) {
     trackingText
       .attr('y', posy - 15)
       .text(value);
+
+    xTrackingLines.forEach(xTrackingLine => 
+      xTrackingLine
+        .attr('x1', posx)
+        .attr('x2', posx));
+    xTrackingTexts.forEach(xTrackingText => 
+      xTrackingText
+        .attr('x', posx + 3)
+        .text(xValue));
   });
   
 };
@@ -212,39 +265,56 @@ var mapValues = function(values, index, filter) {
   var parseTime = d3.timeParse("%Y-%m-%dT%H:%M:%S%Z");
   var rows = d3.csvParseRows(values, function(d/*, i*/) {
     var val = d[index];
-    if (!val) { return null; }
+    var time = parseTime(d[0]);
+    if (!val || !time) { return null; }
     return {
-      timestamp: parseTime(d[0]),
+      timestamp: time,
       value: parseFloat(d[index])
     };
   });
+  var min = moment().subtract(hours, 'hours');
   if (point_limit > 0 && rows.length > point_limit) {
-    rows.splice(0, rows.length - point_limit - 1);
+    rows.splice(0, rows.findIndex(r => r.timestamp > min)); //rows.length - point_limit - 1);
   }
   return rows;
+  return rows.filter(r => r.timestamp > min);
 };
 
 
 var update = function() {
-  $.get('/api/status/history.csv').done(function(csv) { 
+  xTrackingLines = [];
+  xTrackingTexts = [];
+  $.get('/api/status/history.csv?hours=' + hours).done(function(csv) { 
     history_graph(mapValues(csv, 1), '#temperature_graph', "Temp (F)"); 
     history_graph(mapValues(csv, 2), '#depth_graph', "Depth"); 
     history_graph(mapValues(csv, 6), '#air_temperature_graph', "Air Temp (F)", mapValues(csv, 7), "Humidity (%)"); 
+    history_graph(mapValues(csv, 8), '#ph_graph', "pH", undefined, undefined, 2, 40 /* moving average*/); 
   });
 };
 
 window.setInterval(update, 30000);
 update();
 
-function limit_data(hours) {
-    point_limit = 60*2*hours;
+function limit_data(h) {
+  history.replaceState({}, "", "history.html?hours=" + h);
+    point_limit = 60*2*h;
+    hours = h;
     update();
 }
 
 $(function() {
+  $('#two_weeks').click(function(e) {
+    e.preventDefault();
+    limit_data(24*7*2);
+  });
   $('#one_week').click(function(e) {
     e.preventDefault();
     limit_data(24*7);
+  });
+
+  $('#two_days').click(function(e) {
+    e.preventDefault();
+    limit_data(48);
   });
 
   $('#one_day').click(function(e) {

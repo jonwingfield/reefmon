@@ -1,7 +1,11 @@
 mod gpio;
 mod avr_controller;
+#[allow(dead_code)]
+mod ph_monitor;
 
 pub use self::gpio::GpioPin;
+pub use self::ph_monitor::PhConfig;
+use self::ph_monitor::PhMonitor;
 
 use self::avr_controller::AvrController;
 use ::uom::temp::*;
@@ -12,26 +16,35 @@ use std::io as io;
 use carboxyl::{Sink,Stream};
 
 pub type Depth = u16;
+#[allow(dead_code)]
+pub type pH = f32;
 pub type Humidity = f32;
 
 pub struct Devices {
     avr_controller: AvrController,
+    ph_monitor: PhMonitor,
     temp_sink: Sink<Temperature<F>>,
     depth_sink: Sink<Depth>,
     air_temp_sink: Sink<Temperature<F>>,
     humidity_sink: Sink<Humidity>,
+    ph_sink: Sink<pH>,
+    last_intensities: [u8; 6],
 }
 
 impl Devices {
-    pub fn new(i2c_device_id: u8) -> io::Result<Devices> {
+    pub fn new(i2c_device_id: u8, ph_i2c_device_id: u8) -> io::Result<Devices> {
         let avr_controller = try!(AvrController::new(i2c_device_id));
+        let ph_monitor = try!(PhMonitor::new(ph_i2c_device_id, PhConfig::default()));
 
         Ok(Devices {
             avr_controller: avr_controller,
+            ph_monitor: ph_monitor,
             temp_sink: Sink::new(),
             depth_sink: Sink::new(),
             air_temp_sink: Sink::new(), 
             humidity_sink: Sink::new(),
+            ph_sink: Sink::new(),
+            last_intensities: [255_u8; 6], // initialize to high values so we ramp down by default
         })
     }
 
@@ -46,6 +59,11 @@ impl Devices {
             info!("Got air temp: {:?} and humidity: {:?}", air_temp.to_f().value(), humidity);
             self.air_temp_sink.send(air_temp.to_f());
             self.humidity_sink.send(humidity);
+
+            // TODO: when re-enabling, remove dead code warning at top of this file
+            // let ph = try!(self.ph_monitor.get_ph());
+
+            self.ph_sink.send(10.0);
         }
 
         if ticks % 1000 == 0 {
@@ -57,8 +75,15 @@ impl Devices {
         Ok(())
     }
 
-    pub fn set_intensities(&mut self, values: &[u8]) -> io::Result<()> { 
-        self.avr_controller.set_intensities(values) 
+    pub fn set_intensities(&mut self, values: &[u8; 6]) -> io::Result<()> { 
+        // check so we don't spam the i2c bus
+        if self.last_intensities != *values {
+            self.last_intensities = values.clone();
+            info!("Sending updated intensities: {:?}", values);
+            self.avr_controller.set_intensities(values) 
+        } else {
+            Ok(())
+        }
     }
 
     pub fn temp_stream(&self) -> Stream<Temperature<F>> { 
@@ -67,17 +92,18 @@ impl Devices {
     pub fn depth_stream(&self) -> Stream<Depth> { self.depth_sink.stream() }
     pub fn air_temp_stream(&self) -> Stream<Temperature<F>> { self.air_temp_sink.stream() }
     pub fn humidity_stream(&self) -> Stream<Humidity> { self.humidity_sink.stream() }
+    pub fn ph_stream(&self) -> Stream<pH> { self.ph_sink.stream() }
 }
 
 pub struct PiGpio {
-    owners: [(u64,bool); 4],
+    owners: [(u64,bool); 7],
 }
 
 impl PiGpio {
     pub fn new() -> PiGpio {
         PiGpio {
             // these are the exported pins we reserved for IO
-            owners: [(17, false), (27, false), (22, false), (5, false)]
+            owners: [(17, false), (27, false), (22, false), (5, false), (6, false), (13, false), (26, false)]
         }
     }
 

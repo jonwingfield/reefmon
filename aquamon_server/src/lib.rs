@@ -428,67 +428,67 @@ pub fn start(tx_live: Sender<LiveModeSettings>, status_lock: Arc<RwLock<Status>>
         mount.mount("/", Static::new(Path::new("static/")));
 
         let mut chain = Chain::new(mount);
-        chain.link_before(BasicAuth);
+        // chain.link_before(BasicAuth);
         chain.link_before(::persistent::Read::<bodyparser::MaxBodyLength>::one(MAX_BODY_LENGTH));
 
         Iron::new(chain).http("192.168.1.243:80").unwrap();
     }
 
-    #[derive(Debug)]
-    struct AuthError;
-    struct BasicAuth;
+    // #[derive(Debug)]
+    // struct AuthError;
+    // struct BasicAuth;
     
-    impl Error for AuthError {
-        fn description(&self) -> &str { "authentication error" }
-    }
+    // impl Error for AuthError {
+    //     fn description(&self) -> &str { "authentication error" }
+    // }
 
-    impl fmt::Display for AuthError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            fmt::Display::fmt("authentication error", f)
-        }
-    }
+    // impl fmt::Display for AuthError {
+    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    //         fmt::Display::fmt("authentication error", f)
+    //     }
+    // }
 
-    impl middleware::BeforeMiddleware for BasicAuth {
-        fn before(&self, req: &mut Request) -> IronResult<()> {
-            if let Some(host) = req.headers.get::<headers::Host>() {
-                if host.hostname == "192.168.1.243" { return Ok(()); }
-            }
-            if req.url.path().get(0).unwrap().to_string() == "sa" {
-                return Ok(());
-            }
-            match req.headers.get::<headers::Authorization<headers::Basic>>() {
-                Some(&headers::Authorization(headers::Basic { ref username, password: Some(ref password) })) => {
-                    if username == "jon" && password == "aquamon1!" {
-                        Ok(())
-                    } else {
-                        Err(IronError {
-                            error: Box::new(AuthError),
-                            response: Response::with((status::Unauthorized, "Wrong username or password."))
-                        })
-                    }
-                }
-                Some(&headers::Authorization(headers::Basic { username: _, password: None })) => {
-                    Err(IronError {
-                        error: Box::new(AuthError),
-                        response: Response::with((status::Unauthorized, "Missing password"))
-                    })
-                }
-                None => {
-                    let mut hs = headers::Headers::new();
-                    hs.set_raw("WWW-Authenticate", vec![b"Basic realm=\"main\"".to_vec()]);
-                    Err(IronError {
-                        error: Box::new(AuthError),
-                        response: Response {
-                            status: Some(status::Unauthorized),
-                            headers: hs,
-                            extensions: TypeMap::new(),
-                            body: None
-                        }
-                    })
-                }        
-            }
-        }
-    }
+    // impl middleware::BeforeMiddleware for BasicAuth {
+    //     fn before(&self, req: &mut Request) -> IronResult<()> {
+    //         if let Some(host) = req.headers.get::<headers::Host>() {
+    //             if host.hostname == "192.168.1.243" { return Ok(()); }
+    //         }
+    //         if req.url.path().get(0).unwrap().to_string() == "sa" {
+    //             return Ok(());
+    //         }
+    //         match req.headers.get::<headers::Authorization<headers::Basic>>() {
+    //             Some(&headers::Authorization(headers::Basic { ref username, password: Some(ref password) })) => {
+    //                 if username == "jon" && password == "aquamon1!" {
+    //                     Ok(())
+    //                 } else {
+    //                     Err(IronError {
+    //                         error: Box::new(AuthError),
+    //                         response: Response::with((status::Unauthorized, "Wrong username or password."))
+    //                     })
+    //                 }
+    //             }
+    //             Some(&headers::Authorization(headers::Basic { username: _, password: None })) => {
+    //                 Err(IronError {
+    //                     error: Box::new(AuthError),
+    //                     response: Response::with((status::Unauthorized, "Missing password"))
+    //                 })
+    //             }
+    //             None => {
+    //                 let mut hs = headers::Headers::new();
+    //                 hs.set_raw("WWW-Authenticate", vec![b"Basic realm=\"main\"".to_vec()]);
+    //                 Err(IronError {
+    //                     error: Box::new(AuthError),
+    //                     response: Response {
+    //                         status: Some(status::Unauthorized),
+    //                         headers: hs,
+    //                         extensions: TypeMap::new(),
+    //                         body: None
+    //                     }
+    //                 })
+    //             }        
+    //         }
+    //     }
+    // }
 
 }
 

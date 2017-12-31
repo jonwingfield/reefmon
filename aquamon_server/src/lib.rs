@@ -458,7 +458,7 @@ pub fn start(tx_live: Sender<LiveModeSettings>, status_lock: Arc<RwLock<Status>>
             }
             match req.headers.get::<headers::Authorization<headers::Basic>>() {
                 Some(&headers::Authorization(headers::Basic { ref username, password: Some(ref password) })) => {
-                    if username == "jon" && password == "Jordan40" {
+                    if username == "jon" && password == "aquamon1!" {
                         Ok(())
                     } else {
                         Err(IronError {

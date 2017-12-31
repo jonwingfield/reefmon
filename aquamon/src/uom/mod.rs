@@ -40,6 +40,18 @@ pub mod temp {
         }
     }
 
+    impl fmt::Debug for Temperature<C> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}C", self.0 as f32 / 100.0)
+        }
+    }
+
+    impl fmt::Debug for Temperature<F> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}F", self.0 as f32 / 100.0)
+        }
+    }
+
     impl<Unit> Sub for Temperature<Unit> {
         type Output = Self;
         fn sub(self, _rhs: Self) -> Self {

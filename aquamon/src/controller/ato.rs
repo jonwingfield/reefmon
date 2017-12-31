@@ -157,7 +157,8 @@ mod test {
             high: 120,
             high_inches: 6.0, // 10 steps per inch
             tank_surface_area: 100,
-            pump_gph: 5.0 // .2 gpm 
+            pump_gph: 5.0, // .2 gpm 
+            tank_volume: 10.0,
         };
 
         // raise 3 inches (30 steps / 10 steps per inch)

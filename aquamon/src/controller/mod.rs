@@ -15,11 +15,13 @@ use self::temperature::TemperatureController;
 use self::lights::{LightController, FadeSpeed};
 use self::ato::AtoController;
 use self::schedule::{Schedule, ScheduleLeg};
-use self::doser::{DoserController, Dose};
+use self::doser::DoserController;
 
 use carboxyl::Stream;
 
 pub use self::ato::Calibration;
+pub use self::doser::Dose;
+pub use self::temperature::TemperatureRange;
 
 pub struct AquariumController {
     light_controller: LightController,
@@ -54,7 +56,7 @@ const TICK_RESOLUTION_MS: u64 = 5000;
 const PUMP_TIMEOUT_S: u64 = 20 * 60;
 
 impl AquariumController {
-    pub fn new(schedule: Schedule, temp_min: Temperature<F>, temp_max: Temperature<F>, depth_low: Depth, depth_high: Depth, depth_calibration: Calibration, temp_stream: Stream<Temperature<F>>, depth_stream: Stream<Depth>, pump_rate_ml_min: f32) -> AquariumController {
+    pub fn new(schedule: Schedule, heater_range: TemperatureRange, cooler_range: TemperatureRange, depth_low: Depth, depth_high: Depth, depth_calibration: Calibration, temp_stream: Stream<Temperature<F>>, depth_stream: Stream<Depth>, pump_rate_ml_min: f32) -> AquariumController {
         let mut pi_gpio = PiGpio::new();
         let pin0 =  pi_gpio.take_pin(0, true).unwrap();
         let pin1 = pi_gpio.take_pin(1, true).unwrap();
@@ -65,7 +67,7 @@ impl AquariumController {
         pin3.turn_on().unwrap();
         AquariumController {
             light_controller: LightController::new(schedule, pin4),
-            temp_controller: TemperatureController::new(temp_min, temp_max, pin0, pin2, temp_stream),
+            temp_controller: TemperatureController::new(heater_range, cooler_range, pin0, pin2, temp_stream),
             ato_controller: AtoController::new(depth_low, depth_high, depth_calibration, pin1, depth_stream),
             doser_controller: DoserController::new(pin5, pump_rate_ml_min),
             pump_pin: pin3,
@@ -77,8 +79,8 @@ impl AquariumController {
         self.light_controller.schedule_updated(schedule)
     }
 
-    pub fn set_temp_range(&mut self, min: Temperature<F>, max: Temperature<F>) {
-        self.temp_controller.set_range(min, max);
+    pub fn set_temp_range(&mut self, heater_range: TemperatureRange, cooler_range: TemperatureRange) {
+        self.temp_controller.set_range(heater_range, cooler_range);
     }
 
     pub fn set_depth_settings(&mut self, low: Depth, high: Depth, calibration: Calibration) {
@@ -91,6 +93,7 @@ impl AquariumController {
 
     pub fn tick(&mut self, devices: &mut Devices, ticks: u64) -> Result<(), io::Error> {
         try!(self.light_controller.tick(devices, ticks));
+        try!(self.doser_controller.tick(ticks));
         self.next_tick(ticks)
             .map_or(Ok(()), |tick| self.run(tick))
     }
@@ -131,7 +134,6 @@ impl AquariumController {
         try!(self.temp_controller.tick(tick_s));
         try!(self.ato_controller.tick(tick_s, &mut self.pump_pin));
         try!(self.check_pump(tick_s));
-        try!(self.doser_controller.tick(tick_s));
         Ok(())
     }
 

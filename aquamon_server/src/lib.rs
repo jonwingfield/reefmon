@@ -77,10 +77,19 @@ pub mod server {
     }
 
     #[allow(non_snake_case)]
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
     pub struct TemperatureSettings {
+        pub heater: TemperatureRangeSettings,
+        pub cooler: TemperatureRangeSettings,
+    }
+
+    #[allow(non_snake_case)]
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct TemperatureRangeSettings {
         pub min: f32,
+        pub minTime: String,
         pub max: f32,
+        pub maxTime: String,
     }
 
     #[allow(non_snake_case)]
@@ -217,13 +226,13 @@ pub fn start(tx_live: Sender<LiveModeSettings>, status_lock: Arc<RwLock<Status>>
                 Ok(Some(temperature_settings)) => {
                     {
                         mutex_temp.lock().unwrap()
-                            .send(Commands { temperature_settings: Some(temperature_settings), ..Default::default() })
+                            .send(Commands { temperature_settings: Some(temperature_settings.clone()), ..Default::default() })
                             .unwrap();
                     }
                      
                     { 
                         let mut c = writer_temp_settings.write().unwrap();
-                        *c = temperature_settings.clone();
+                        *c = temperature_settings;
                     }
 
                     Ok(Response::with((status::Ok, "".to_string())))

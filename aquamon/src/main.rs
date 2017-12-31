@@ -27,14 +27,13 @@ use env_logger::LogBuilder;
 
 use aquamon::uom::temp::Temperature;
 use aquamon::devices::{Devices,Depth};
-use aquamon::controller::{AquariumController, Calibration};
+use aquamon::controller::{AquariumController, Calibration, Dose, TemperatureRange};
 use aquamon::controller::schedule::{Schedule, ScheduleLeg};
-use aquamon::controller::doser::Dose;
 use aquamon::controller::Status;
 
 use aquamon_server::server::Status as StatusDto;
 use aquamon_server::server::LightingSchedule as ScheduleDto;
-use aquamon_server::server::{Settings, Commands, LightSettings, TemperatureSettings, DepthSettings, DepthSettingsMaintain, DepthSettingsDepthValues, LiveModeSettings, DoserSettings};
+use aquamon_server::server::{Settings, Commands, LightSettings, TemperatureSettings, TemperatureRangeSettings, DepthSettings, DepthSettingsMaintain, DepthSettingsDepthValues, LiveModeSettings, DoserSettings};
 
 use aquamon::alerting::alert;
 
@@ -43,7 +42,10 @@ const TICK_MS: u64 = 10;
 fn main() {
     init_logging();
     let mut settings_dto = load_settings().unwrap_or(Settings {
-        temperature_settings: TemperatureSettings { min: 79.5, max: 80.5 },
+        temperature_settings: TemperatureSettings { 
+            heater: TemperatureRangeSettings { min: 79.5, minTime: "07:00".to_string(), max: 79.5, maxTime: "16:00".to_string() },
+            cooler: TemperatureRangeSettings { min: 80.5, minTime: "07:00".to_string(), max: 80.5, maxTime: "16:00".to_string() },
+        },
         depth_settings: DepthSettings { 
             maintainRange: DepthSettingsMaintain { low: 0, high: 1},
             depthValues: DepthSettingsDepthValues { low: 0, high: 4096, highInches: 10.0, tankSurfaceArea: 17*10, tankVolume: 10.0, pumpGph: 50.0 }
@@ -80,8 +82,8 @@ fn main() {
     let ph_signal = devices.ph_stream().hold(8.0);
     let depth_signal = devices.depth_stream().hold(61 * 4);
     let mut controller = AquariumController::new(map_schedule(&settings_dto.lighting_schedule), 
-                                                 Temperature::in_f(settings_dto.temperature_settings.min),
-                                                 Temperature::in_f(settings_dto.temperature_settings.max),
+                                                 map_temperature_range(&settings_dto.temperature_settings.heater),
+                                                 map_temperature_range(&settings_dto.temperature_settings.cooler),
                                                  settings_dto.depth_settings.maintainRange.low,
                                                  settings_dto.depth_settings.maintainRange.high,
                                                  Calibration {
@@ -125,8 +127,8 @@ fn main() {
                 match commands.temperature_settings {
                     Some(temperature_settings) => {
                         controller.set_temp_range(
-                            Temperature::in_f(temperature_settings.min),
-                            Temperature::in_f(temperature_settings.max));
+                            map_temperature_range(&temperature_settings.heater),
+                            map_temperature_range(&temperature_settings.cooler));
                         settings_dto.temperature_settings = temperature_settings;
                     },
                     None => {}
@@ -221,6 +223,15 @@ fn map_schedule(schedule_dto: &ScheduleDto) -> Schedule {
         intensities: l.intensities,
         start_time: NaiveTime::parse_from_str(&l.startTime, "%H:%M").unwrap()
     }).collect())
+}
+
+fn map_temperature_range(settings: &TemperatureRangeSettings) -> TemperatureRange { 
+    TemperatureRange { 
+        min: Temperature::in_f(settings.min),
+        min_time: parse_time(&settings.minTime),
+        max: Temperature::in_f(settings.max),
+        max_time: parse_time(&settings.maxTime),
+    }
 }
 
 fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<LiveModeSettings>, Receiver<Commands>) {

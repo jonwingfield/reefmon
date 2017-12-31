@@ -262,8 +262,8 @@ $(function() {
 
       var waterLevelLow = getIntValue('#waterLevelLow'),
         waterLevelHigh = getIntValue('#waterLevelHigh'),
-        minTemp = getFloatValue('#temperatureMin') - 0.30,
-        maxTemp = getFloatValue('#temperatureMax') + 0.30,
+        minTemp = getFloatValue('#temperatureHeaterMin') - 0.20,
+        maxTemp = getFloatValue('#temperatureCoolerMax') + 0.20,
         minDepthValue = getIntValue('#minDepthValue'),
         maxDepthValue = getIntValue('#maxDepthValue'),
         maxDepthInches = getFloatValue('#maxDepthInches');
@@ -304,13 +304,32 @@ $(function() {
 
   $('#updateTempSettings').click(function(e) {
     e.preventDefault();
-    var settings = { min: getFloatValue('#temperatureMin'), max: getFloatValue('#temperatureMax') };
+    var settings = { 
+      heater: {
+        min: getFloatValue('#temperatureHeaterMin'), 
+        minTime: $('#temperatureHeaterMinTime').val(),
+        max: getFloatValue('#temperatureHeaterMax'),
+        maxTime: $('#temperatureHeaterMaxTime').val(),
+      },
+      cooler: {
+        min: getFloatValue('#temperatureCoolerMin'), 
+        minTime: $('#temperatureCoolerMinTime').val(),
+        max: getFloatValue('#temperatureCoolerMax'),
+        maxTime: $('#temperatureCoolerMaxTime').val(),
+      }
+    };
     $.post('/api/settings/temperature', JSON.stringify(settings));
   });
 
   $.getJSON('/api/settings/temperature').then(function(data) {
-    $('#temperatureMin').val(data.min);
-    $('#temperatureMax').val(data.max);
+    $('#temperatureHeaterMin').val(data.heater.min);
+    $('#temperatureHeaterMinTime').val(data.heater.minTime);
+    $('#temperatureHeaterMax').val(data.heater.max);
+    $('#temperatureHeaterMaxTime').val(data.heater.maxTime);
+    $('#temperatureCoolerMin').val(data.cooler.min);
+    $('#temperatureCoolerMinTime').val(data.cooler.minTime);
+    $('#temperatureCoolerMax').val(data.cooler.max);
+    $('#temperatureCoolerMaxTime').val(data.cooler.maxTime);
   });
 
   $('#updateDepthSettings').click(function(e) {
@@ -334,6 +353,7 @@ $(function() {
     $('#pumpGph').val(data.depthValues.pumpGph);
 
     updateStatus();
+    updateMaxDose();
   });
 
   /** 
@@ -342,27 +362,40 @@ $(function() {
 
   var calculateMaxDose = function(volume) { return 0.7 * volume / 10.0; };
 
-  $('#tankVolume').on('change', function() {
+  var updateMaxDose = function() {
     var volume = getFloatValue('#tankVolume');
-    $('#calculatedMaxDose').html(calculateMaxDose(volume));
-  });
+    $('#calculatedMaxDose').html(calculateMaxDose(volume).toFixed(2));
+  };
+
+  $('#tankVolume').on('change', updateMaxDose);
 
   $('#updateDosing').click(function(e) {
     e.preventDefault();
     var doseAmountMl = getFloatValue('#doseAmount');
     var maxDose = calculateMaxDose(getFloatValue('#tankVolume'));
     var numDoses = Math.ceil(doseAmountMl / maxDose);
-    
+
     var startHour = getIntValue('#doseRangeStart'),
         endHour = getIntValue('#doseRangeEnd'),
         doseSpacing = Math.round((endHour - startHour) / numDoses);
 
-    var schedule = Array(numDoses).map(function(_, i) {
-      return { 
-        startTime: (startHour + i * doseSpacing) + ":00",
+    var schedule = [];
+    if (numDoses > 0) {
+      schedule.push({
+        startTime: startHour + ":00",
         doseAmountMl: (doseAmountMl / numDoses).toFixed(2),
-      };
-    });
+      });
+    }
+    if (numDoses > 1) {
+      schedule = schedule.concat(Array(numDoses - 1).fill(null).map(function(_, i) {
+        return { 
+          startTime: (startHour + (i+1) * doseSpacing) + ":00",
+          doseAmountMl: (doseAmountMl / numDoses).toFixed(2),
+        };
+      }));
+    }
+
+    console.log("Calculated dosage", schedule);
 
     var settings = {
       pumpRateMlMin: getFloatValue('#pumpRate'),
@@ -372,11 +405,11 @@ $(function() {
       schedule: schedule,
     };
 
-    $.post('/api/settings/dosing', JSON.stringify(settings));
+    $.post('/api/settings/doser', JSON.stringify(settings));
   });
 
-  $.getJSON('/api/settings/dosing').then(function(data) {
-    $('#pumpRate').val(data.pumpRate);
+  $.getJSON('/api/settings/doser').then(function(data) {
+    $('#pumpRate').val(data.pumpRateMlMin);
     $('#doseAmount').val(data.doseAmountMl);
     $('#doseRangeStart').val(data.doseRangeStart);
     $('#doseRangeEnd').val(data.doseRangeEnd);

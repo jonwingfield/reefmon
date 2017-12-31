@@ -75,10 +75,26 @@
     <section> 
       <div>
         <h3>Temperature: <span id="current_temp"></span></h3>
-        <label for="temperatureSetPoint">Temperature Range</label> <input type="number" id="temperatureMin" min="68" max="84" style="width:7em" /> - 
-          <input type="number" id="temperatureMax" min="68" max="84" style="width:7em" />
-        <button id="updateTempSettings">Update</button>
-        <svg id="temperatureGraph" width="700" height="200"></div>
+        <label for="temperatureSetPoint">Temperature Range</label> 
+        <fieldset>
+          <h3>Heater Range</h3>
+          <div>
+            Min: <input type="number" id="temperatureHeaterMin" min="68" max="84" style="width:7em" /> at <input type="text" id="temperatureHeaterMinTime" />
+          </div>
+          <div>
+            Max: <input type="number" id="temperatureHeaterMax" min="68" max="84" style="width:7em" /> at <input type="text" id="temperatureHeaterMaxTime" />
+          </div>
+        </fieldset>
+        <fieldset>
+          <h3>Cooler Range</h3>
+          <div>
+            Min: <input type="number" id="temperatureCoolerMin" min="68" max="84" style="width:7em" /> at <input type="text" id="temperatureCoolerMinTime" />
+          </div>
+          <div>
+            Max: <input type="number" id="temperatureCoolerMax" min="68" max="84" style="width:7em" /> at <input type="text" id="temperatureCoolerMaxTime" />
+          </div>
+        </fieldset>
+          <button id="updateTempSettings">Update</button>
         <div>Air Temperature: <span id="airTemp"></span></div>
         <div>Humidity: <span id="humidity"></span></div>
       </div>
@@ -127,7 +143,7 @@
             <input type="number" id="doseRangeStart" style="width: 7em" min="0" max="24" value="7" /> - 
             <input type="number" id="doseRangeEnd" style="width: 7em" min="0" max="24" value="18" />  
           </div>
-          <div><em>Automatically splits dosing so that alkalinity is never raised by more than 0.1dKh at a time (<span id="calculatedMaxDose"></span>).</em></div>
+          <div><em>Automatically splits dosing so that alkalinity is never raised by more than 0.1dKh at a time (<span id="calculatedMaxDose"></span>mL).</em></div>
         </fieldset>
       </div>
       <button id="updateDosing">Update</button>

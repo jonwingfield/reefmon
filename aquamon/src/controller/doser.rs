@@ -5,6 +5,10 @@ use chrono::Duration;
 
 pub struct DoserController {
     pin: GpioPin,
+    stream: DoserStream,
+}
+
+struct DoserStream {
     pump_rate_ml_min: f32,
     schedule: Vec<Dose>,
 }
@@ -15,39 +19,43 @@ pub struct Dose {
     pub start_time: NaiveTime,
 }
 
-const TICK_RESOLUTION_MS: u64 = 1000;
-
 impl DoserController {
     pub fn new(pin: GpioPin, pump_rate_ml_min: f32) -> DoserController {
         DoserController {
             pin: pin,
-            pump_rate_ml_min: pump_rate_ml_min,
-            schedule: vec![],
+            stream: DoserStream {
+                pump_rate_ml_min: pump_rate_ml_min,
+                schedule: vec![],
+            }
         }
     }
 
     pub fn set_settings(&mut self, pump_rate_ml_min: f32, schedule: Vec<Dose>) {
         info!("Doser settings updated. Pump rate: {:?}, schedule: {:?}", pump_rate_ml_min, schedule);
-        self.schedule = schedule;
-        self.pump_rate_ml_min = pump_rate_ml_min;
+        self.stream.schedule = schedule;
+        self.stream.pump_rate_ml_min = pump_rate_ml_min;
     }
 
     pub fn tick(&mut self, tick_ms: u64) -> io::Result<()> {
-        if tick_ms % TICK_RESOLUTION_MS != 0 { return Ok(()); }
+        // only check every second
+        if tick_ms % 1000 != 0 { return Ok(()); }
 
-        let local_time = UTC::now().with_timezone(&Local);
-        let time = local_time.time();
+        let time = UTC::now().with_timezone(&Local).time();
 
-        let cur_dose = self.schedule
-            .iter()
-            .find(|dose| dose.start_time >= time && dose.get_end_time(self.pump_rate_ml_min) <= time);
-
-        if cur_dose.is_some() {
-            info!("Doser: dosing {:?}mL", cur_dose.unwrap().dose_amount_ml); 
+        if let Some(dose) = self.stream.tick(time) {
+            info!("Doser: dosing {:?}mL", dose.dose_amount_ml); 
             self.pin.turn_on()
         } else {
             self.pin.turn_off()
         }
+    }
+}
+
+impl DoserStream {
+    pub fn tick<'a>(&'a self, time: NaiveTime) -> Option<&'a Dose> {
+        self.schedule
+            .iter()
+            .find(|dose| dose.start_time <= time && dose.get_end_time(self.pump_rate_ml_min) >= time)
     }
 }
 
@@ -59,3 +67,51 @@ impl Dose {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn doser_start_end_time() {
+        let dose = Dose {
+            dose_amount_ml: 0.4,
+            start_time: NaiveTime::from_hms(7, 0, 0),
+        };
+
+        assert_eq!(dose.get_end_time(1.1), NaiveTime::from_hms(7, 0, 22));
+    }
+
+    #[test]
+    fn doser_on() {
+        let dose = Dose {
+            dose_amount_ml: 0.4,
+            start_time: NaiveTime::from_hms(7, 0, 0),
+        };
+
+        let stream = DoserStream {
+            pump_rate_ml_min: 1.1,
+            schedule: vec![dose]
+        };
+
+        assert!(stream.tick(NaiveTime::from_hms(7, 0, 0)).is_some());
+        assert!(stream.tick(NaiveTime::from_hms(7, 0, 22)).is_some());
+        assert!(stream.tick(NaiveTime::from_hms(7, 0, 15)).is_some());
+    }
+
+    #[test]
+    fn doser_off() {
+        let dose = Dose {
+            dose_amount_ml: 0.4,
+            start_time: NaiveTime::from_hms(7, 0, 0),
+        };
+
+        let stream = DoserStream {
+            pump_rate_ml_min: 1.1,
+            schedule: vec![dose]
+        };
+
+        assert!(stream.tick(NaiveTime::from_hms(6, 59, 59)).is_none());
+        assert!(stream.tick(NaiveTime::from_hms(7, 0, 23)).is_none());
+        assert!(stream.tick(NaiveTime::from_hms(9, 0, 23)).is_none());
+    }
+}

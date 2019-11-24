@@ -28,10 +28,11 @@
 
 // atmega328pb defines
 #ifdef MEGA328PB
-#define TWAR TWAR1
-#define TWCR TWCR1
-#define TWDR TWDR1
-#define TWSR TWSR1
+#define TWAR TWAR0
+#define TWCR TWCR0
+#define TWDR TWDR0
+#define TWSR TWSR0
+#define TWI_vect TWI0_vect
 #endif
 
 #ifdef SMB_USE_PEC_LOOKUP
@@ -50,6 +51,9 @@ void SMBusInit(void)
     TWAR = SMB_OWN_ADDRESS << 1;
     // Enable TWI-interface, enable ACK, enable interrupt, clear interrupt flag
     TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWIE) | (1 << TWEA);
+#ifdef MEGA328PB
+    /* PRR0 |= (1 << TWI0); */
+#endif
 }
 
 

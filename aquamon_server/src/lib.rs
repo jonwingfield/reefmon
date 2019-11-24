@@ -15,6 +15,8 @@ extern crate serde_json;
 
 pub mod server {
     use iron::{headers, middleware, status};
+    use iron::headers::ContentType;
+    use iron::mime::{Mime, TopLevel, SubLevel};
     use iron::prelude::*;
     use iron::typemap::TypeMap;
     use iron_compress::GzipWriter;
@@ -70,6 +72,10 @@ pub mod server {
         pub airTempF: f32,
         pub humidity: f32,
         pub pH: f32,
+        pub heater_on: bool,
+        pub cooler_on: bool,
+        pub ato_pump_on: bool,
+        pub pump_on: bool,
         // pub timestamp: String,
         // TODO: map of on/off triggers
         // TODO: water level
@@ -389,9 +395,19 @@ pub fn start(tx_live: Sender<LiveModeSettings>, status_lock: Arc<RwLock<Status>>
         }, "garage_door");
 
         let status_lock_main = status_lock.clone();
-        router.get("/status", move |_: &mut Request| {
+        router.get("/status", move |request: &mut Request| {
             let status = status_lock_main.read().unwrap();
-            Ok(Response::with((status::Ok, serde_json::to_string(&(*status)).unwrap())))
+            match request.headers.get::<ContentType>() {
+                Some(&ContentType(Mime(TopLevel::Text, SubLevel::Html, _))) => {
+                    Ok(Response::with((status::Ok, 
+                                       format!("Temperature is {} farenheit. Depth is {}.",
+                                               status.currentTempF,
+                                               status.depth))))
+                }
+                _ => {
+                    Ok(Response::with((status::Ok, serde_json::to_string(&(*status)).unwrap())))
+                }
+            }
         }, "status");
 
         const CSV_LINE_SIZE: i64 = 65;

@@ -72,7 +72,7 @@ pub struct Status {
     pub alerts: Vec<String>,
 }
 
-const HEATER_MAX_CYCLE_TIME: u64 = 12 * 60 * 60; // 12 hours * 60 minutes * 60 seconds
+const HEATER_MAX_CYCLE_TIME: u64 = 24 * 60 * 60; // 12 hours * 60 minutes * 60 seconds
 const TIMEOUT_PERIOD: u64 = 10 * 60;
 
 impl TemperatureController {

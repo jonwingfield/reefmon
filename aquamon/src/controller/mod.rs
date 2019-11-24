@@ -49,6 +49,7 @@ pub struct Status {
     pub heater_on: bool,
     pub ato_pump_on: bool,
     pub cooler_on: bool,
+    pub pump_on: bool,
     pub alerts: Vec<Alert>,
 }
 
@@ -64,7 +65,8 @@ impl AquariumController {
         let mut pin3 = pi_gpio.take_pin(3, true).unwrap();
         let pin4 = pi_gpio.take_pin(4, false).unwrap();
         let pin5 = pi_gpio.take_pin(5, false).unwrap();
-        pin3.turn_on().unwrap();
+        // pin3.turn_on().unwrap();
+        pin3.turn_off().unwrap();
         AquariumController {
             light_controller: LightController::new(schedule, pin4),
             temp_controller: TemperatureController::new(heater_range, cooler_range, pin0, pin2, temp_stream),
@@ -104,7 +106,9 @@ impl AquariumController {
         } else {
             self.pump_off_timeout_s = u64::max_value();
         }
-        self.pump_pin.set(enabled)
+        // Temp power saving until we rewire as NC relay
+        // self.pump_pin.set(enabled)
+        Ok(())
     }
 
     pub fn set_viewing_mode(&mut self, enabled: bool, tick: u64, leg: ScheduleLeg) { 
@@ -125,6 +129,7 @@ impl AquariumController {
             heater_on: temp_status.heater,
             cooler_on: temp_status.cooler,
             ato_pump_on: self.ato_controller.status(),
+            pump_on: self.pump_pin.status().unwrap_or(false),
             alerts: temp_status.alerts.into_iter().map(|a| Alert { component: Component::Temperature, message: a }).collect(),
         }
     }

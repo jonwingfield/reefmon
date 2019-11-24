@@ -27,8 +27,7 @@ pub fn alert(alerts: &Vec<Alert>) -> Result<(), Error>  {
 
     let pass = env::var("GMAIL_PWD").unwrap();
 
-    let mut mailer = SmtpTransportBuilder::new(("smtp.gmail.com", 587))
-        .unwrap()
+    let mut mailer = SmtpTransportBuilder::new(("smtp.gmail.com", 587))?
         .credentials("wingfield.jon@gmail.com", &pass)
         .security_level(SecurityLevel::AlwaysEncrypt)
         .build();

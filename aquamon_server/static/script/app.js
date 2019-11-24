@@ -252,6 +252,29 @@ $(function() {
     return whole + "" + top + "/" + bottom + '"';
   };
 
+  if (window.navigator.serviceWorker) {
+    window.navigator.serviceWorker.register('../worker.js');
+  }
+  var notify = function(message, tag) {
+    if (window.Notification) {
+      window.Notification.requestPermission().then(function(permission) {
+          if (permission === 'granted') {
+            navigator.serviceWorker.ready.then(function(registration) {
+              registration.showNotification(message, {
+                requireInteraction: true,
+                vibrate: [200, 100, 200, 100, 200, 100, 400],
+                tag: tag,
+              });
+            });
+          } else {
+            // alert(message);
+          }
+      });
+    } else {
+      // alert(message);
+    }
+  };
+
   var updateStatus = function() {
     $.getJSON('/api/status').then(function(data) {
       var temp = $('#current_temp').html(data.currentTempF + 'F');
@@ -259,11 +282,15 @@ $(function() {
       var pH = $('#pH').html(data.pH);
       $('#airTemp').html(data.airTempF + 'F');
       $('#humidity').html(data.humidity + '%');
+      $('#status\\.heater_on').html(data.heater_on.toString());
+      $('#status\\.cooler_on').html(data.cooler_on.toString());
+      $('#status\\.ato_pump_on').html(data.ato_pump_on.toString());
+      $('#pumpToggle').prop('checked', data.pump_on);
 
       var waterLevelLow = getIntValue('#waterLevelLow'),
         waterLevelHigh = getIntValue('#waterLevelHigh'),
-        minTemp = getFloatValue('#temperatureHeaterMin') - 0.20,
-        maxTemp = getFloatValue('#temperatureCoolerMax') + 0.20,
+        minTemp = getFloatValue('#temperatureHeaterMin') - 0.40,
+        maxTemp = getFloatValue('#temperatureCoolerMax') + 0.40,
         minDepthValue = getIntValue('#minDepthValue'),
         maxDepthValue = getIntValue('#maxDepthValue'),
         maxDepthInches = getFloatValue('#maxDepthInches');
@@ -275,12 +302,14 @@ $(function() {
       $('#steps_per_sixteenth').html(round(1/inchesPerStep/16, 1)); 
       $('#rangeInches').html(formatInchFraction((waterLevelHigh - waterLevelLow) * inchesPerStep).trim());
 
-      if (data.depth < waterLevelLow || data.depth > waterLevelHigh) {
+      if (data.depth < waterLevelLow - 10 || data.depth > waterLevelHigh + 10) {
+        notify("Water level out of range: " + data.depth, 'water_level');
         depth.removeClass('inRange').addClass('outOfRange');
       } else {
         depth.addClass('inRange').removeClass('outOfRange');
       }
       if (data.currentTempF < minTemp || data.currentTempF > maxTemp) {
+        notify("Temperature out of range: " + data.currentTempF + "F", 'temperature');
         temp.removeClass('inRange').addClass('outOfRange');
       } else {
         temp.addClass('inRange').removeClass('outOfRange');

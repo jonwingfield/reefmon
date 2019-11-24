@@ -98,7 +98,7 @@ impl AtoController {
         if self.pump_off > 0 && self.pump_off + 60*5 < tick_s {
             self.pump_off = 0;
             info!("Toggling pump back on");
-            try!(pump_pin.turn_on());
+            // try!(pump_pin.turn_on());
         }
         if depth < self.low_point && self.on_tick_s == 0 {
             // TODO: we can sometimes get into this state after a timeout, need to figure out how
@@ -106,7 +106,7 @@ impl AtoController {
             if depth < self.low_point - 20 {
                 error!("Water level too far below bottom point, please manually fill the tank. This is to avoid overflows when the sensor isn't attached properly, during water changes, etc.");
                 self.pump_off = tick_s;
-                try!(pump_pin.turn_off());
+                // try!(pump_pin.turn_off());
                 return Ok(());
             } 
             if self.prev_high.0 > 0 {

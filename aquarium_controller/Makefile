@@ -199,14 +199,15 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 # Type: avrdude -c ?
 # to get a full listing.
 # AVRDUDE_PROGRAMMER = stk200
-AVRDUDE_PROGRAMMER = avrisp
+AVRDUDE_PROGRAMMER = pi_1
 
 # com1 = serial port. Use lpt1 to connect to parallel port.
-AVRDUDE_PORT = /dev/ttyUSB0
+AVRDUDE_PORT = /dev/ttyUSB2
 #AVRDUDE_PORT = COM1
 
 AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 #AVRDUDE_WRITE_EEPROM = -U eeprom:w:$(TARGET).eep
+AVRDUDE_CONFIG = -C ~/avrdude_gpio.conf
 
 
 # Uncomment the following if you want avrdude's erase cycle counter.
@@ -221,9 +222,9 @@ AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 # Increase verbosity level.  Please use this when submitting bug
 # reports about avrdude. See <http://savannah.nongnu.org/projects/avrdude> 
 # to submit bug reports.
-AVRDUDE_VERBOSE = -vvv
+AVRDUDE_VERBOSE = # -vvv
 
-AVRDUDE_FLAGS = -p $(MCU) -c $(AVRDUDE_PROGRAMMER) -B 1 -P $(AVRDUDE_PORT) -b 19200
+AVRDUDE_FLAGS = -p $(MCU) -c $(AVRDUDE_PROGRAMMER) -B 1 -P $(AVRDUDE_PORT) -b 19200 $(AVRDUDE_CONFIG) 
 AVRDUDE_FLAGS += $(AVRDUDE_NO_VERIFY)
 AVRDUDE_FLAGS += $(AVRDUDE_VERBOSE)
 AVRDUDE_FLAGS += $(AVRDUDE_ERASE_COUNTER)
@@ -364,10 +365,10 @@ gccversion :
 
 # Program the device.  
 program: $(TARGET).hex $(TARGET).eep
-	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)
+	# $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)
 	#to use the raspberry pi, uncomment
-	# scp $(TARGET).hex pi@192.168.2.2:./avrprogram/
-	# ssh pi@192.168.2.2 "cd avrprogram; sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)"
+	scp $(TARGET).hex pi@192.168.1.243:./avrprogram/
+	ssh pi@192.168.1.243 "cd avrprogram; sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)"
 
 
 # Generate avr-gdb config/init file which does the following:

@@ -28,6 +28,9 @@
 #ifdef MEGA328PB
 #define set_channel7(a)  OCR3A = (a)
 #define set_channel8(a)  OCR3B = (a)
+#define NUM_CHANNELS 8
+#else
+#define NUM_CHANNELS 6
 #endif
 
 //Define functions
@@ -71,10 +74,12 @@ int main (void)
 
     sei();
 
+    sbi(PORTB, PB5);
+
     printf("Starting up!...\n");
     
     for (uint8_t j=0; j<6; j++) {
-      set_channel(j+1, (j+1)*30);
+      set_channel(j+1, 0);
     }
 
     uint8_t i=0;
@@ -141,6 +146,7 @@ void publish_depth_reading(void) {
       _delay_ms(1);
     }
     sum /= 20;
+    current = sum;
     
     printf("Raw reading: %u\n", current);
 
@@ -230,16 +236,19 @@ inline static void OutputDepth(SMBData* smb)
  
 inline static void SetChannels(SMBData* smb) 
 {
+
   /* uint8_t byteCount = smb->rxBuffer[1]; */
-  if (crc_verify_buf(smb->rxBuffer+2, 8)) {
+  if (crc_verify_buf(smb->rxBuffer+2, NUM_CHANNELS)) {
     set_channel1(smb->rxBuffer[2]);
     set_channel2(smb->rxBuffer[3]);
     set_channel3(smb->rxBuffer[4]);
     set_channel4(smb->rxBuffer[5]);
     set_channel5(smb->rxBuffer[6]);
     set_channel6(smb->rxBuffer[7]);
+#ifdef MEGA328PB
     set_channel7(smb->rxBuffer[8]);
     set_channel8(smb->rxBuffer[9]);
+#endif
 
     smb->state = SMB_STATE_IDLE;
   } 
@@ -270,8 +279,10 @@ void set_channel(uint8_t channel_id, uint8_t intensity) {
     case 4: set_channel4(intensity); break;
     case 5: set_channel5(intensity); break;
     case 6: set_channel6(intensity); break;
+#ifdef MEGA328PB
     case 7: set_channel7(intensity); break;
     case 8: set_channel8(intensity); break;
+#endif
     default: break;
   }
 }
@@ -334,8 +345,13 @@ void ioinit (void)
 #endif
 
     // ADC Setup
+    //
+/* #ifdef MEGA328PB */
+    PRR0 &= ~(1 << PRADC);
+/* #endif */
     
     ADCSRA |= (1 << ADPS2) | (1 << ADPS1); // Prescaler = 64 since we're running at 8MHz. See p 250
+    ADMUX &= ~(0b1111);
     ADMUX |= (1 << REFS0); // use AVCC on pin. Make sure to have a .1uF cap on AVCC/gnd
     // ADMUX defaults to ADC0, nothing to set 
     ADCSRA |= (1 << ADEN); // enable ADC

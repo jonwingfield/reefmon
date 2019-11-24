@@ -186,11 +186,16 @@ fn main() {
         match devices.tick(i * TICK_MS as u64) {
             Ok(()) => {
                 let mut status = status_lock.write().unwrap();
+                let controller_status = controller.status();
                 status.currentTempF = temp_signal.sample();
                 status.depth = depth_signal.sample();
                 status.airTempF = air_temp_signal.sample();
                 status.humidity = humidity_signal.sample();
                 status.pH = ph_signal.sample();
+                status.heater_on = controller_status.heater_on;
+                status.ato_pump_on = controller_status.ato_pump_on;
+                status.cooler_on = controller_status.cooler_on;
+                status.pump_on = controller_status.pump_on;
             },
             Err(err) => error!("error ticking devices: {:?}", err)
         }
@@ -236,7 +241,7 @@ fn map_temperature_range(settings: &TemperatureRangeSettings) -> TemperatureRang
 
 fn start_server(settings: &Settings) -> (Arc<RwLock<StatusDto>>, Receiver<LiveModeSettings>, Receiver<Commands>) {
     let (tx, rx) = channel();
-    let status = StatusDto { currentTempF: 0.0, depth: 0, airTempF: 0.0, humidity: 0.0, pH: 0.0 };
+    let status = StatusDto { currentTempF: 0.0, depth: 0, airTempF: 0.0, humidity: 0.0, pH: 0.0, heater_on: false, cooler_on: false, ato_pump_on: false, pump_on: false };
     let status_lock = Arc::new(RwLock::new(status));
     let status_return = status_lock.clone();
     let (tx_c, rx_c) = channel();

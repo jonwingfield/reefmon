@@ -69,7 +69,8 @@ impl LightController {
                                    percent)
         };
 
-        let fuge_light_on = time > NaiveTime::from_hms(17,30,0) || time < NaiveTime::from_hms(5,30,0);
+        let fuge_light_on = time > NaiveTime::from_hms(23,00,0) || time < NaiveTime::from_hms(1,00,0);
+        // let fuge_light_on = false;
 
         self.fuge_light_pin.set(fuge_light_on)
             .and_then(|_| devices.set_intensities(&intensities))

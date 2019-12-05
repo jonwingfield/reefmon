@@ -1,0 +1,131 @@
+@baseFontSize: 16;
+@green: #1abc9c;
+@yellow: #f1c40f;
+@red: #c0392b;
+@blue: #3498db;
+@grey: #f2f2f2;
+
+// Gauge
+
+.gauge {
+    position: relative;
+    height: calc(130rem / @baseFontSize);
+
+    h3 {
+        position: absolute; 
+        top: 39px;
+        left: 0;
+        text-align: center;
+        width: calc(200rem / @baseFontSize);
+        margin: calc(20rem / @baseFontSize);
+        z-index: 999;
+    }
+}
+
+.mask {
+  position: relative;
+  overflow: hidden;
+
+  display: block;
+  width: calc(200rem / @baseFontSize);
+  height: calc(100rem / @baseFontSize);
+  margin: calc(20rem / @baseFontSize);
+}
+.semi-circle {
+  position: relative;
+
+  display: block;
+  width: calc(200rem / @baseFontSize);
+  height: calc(100rem / @baseFontSize);
+
+  background: linear-gradient(to right, @red 0%, @yellow 50%, @green 100%);
+
+  border-radius: 50% 50% 50% 50% e('/') 100% 100% 0% 0% ;
+
+  &::before {
+    content: "";
+
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    z-index: 2;
+
+    display: block;
+    width: calc(140rem / @baseFontSize);
+    height: calc(70rem / @baseFontSize);
+    margin-left: calc(-70rem / @baseFontSize);
+
+    background: #fff;
+
+    border-radius: 50% 50% 50% 50% e('/') 100% 100% 0% 0% ;
+  }      
+}
+
+.semi-circle--mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+
+  width: calc(200rem / @baseFontSize);
+  height: calc(200rem / @baseFontSize);
+
+  background: transparent;
+
+  transform: rotate(120deg) translate3d(0,0,0);
+  transform-origin: center center;
+  backface-visibility: hidden;
+  transition: all .3s ease-in-out;
+
+  &::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    left: 0%;
+    z-index: 2;
+
+    display: block;
+    width: calc(202rem / @baseFontSize);
+    height: calc(102rem / @baseFontSize);
+    margin: -1px 0 0 -1px;
+
+    background: #f2f2f2;
+
+    border-radius: 50% 50% 50% 50% e('/') 100% 100% 0% 0% ;
+  }      
+}
+
+.gauge--1 {
+  .semi-circle {
+    background: @green;
+
+  }
+
+&.error {
+    .semi-circle {
+        background: red;
+    }
+}
+}
+
+.gauge--2 {
+  .semi-circle {
+    background: @red;
+  }
+  
+  .semi-circle--mask {
+    transform: rotate(20deg) translate3d(0,0,0);
+  }
+}
+
+.btn--twitter {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  
+  padding: .5rem;
+  
+  background: @blue;
+  
+  color: #fff;
+}

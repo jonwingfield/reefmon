@@ -22,6 +22,28 @@ module.exports = (env, argv) => {
                         }
                     ]
                 },
+                {
+                    test: /\.less$/,
+                    use: [
+                      'style-loader',
+                      {
+                        loader: "css-loader",
+                        options: {
+                            sourceMap: mode !== 'production',
+                            modules: {
+                                localIdentName: mode === 'production' ? '[hash:base64]' : "[local]___[hash:base64:5]",
+                            },
+                            url: false,     // TODO: this disables inline/load images, for now. Is it worth it to do this?
+                            importLoaders: 1,
+                            localsConvention: 'camelCase',
+                        }
+                      },
+                      {
+                          loader: 'less-loader',
+                          options: { sourceMap: mode != 'production' }
+                      }
+                    ]
+                  }
             ]
         },
 

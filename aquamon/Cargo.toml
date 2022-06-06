@@ -15,4 +15,4 @@ chrono = { version = "*", features = ["serde"] }
 sysfs_gpio = "*"
 log = "*"
 carboxyl = "*"
-lettre = "0.6"
+lettre = "0.9"
